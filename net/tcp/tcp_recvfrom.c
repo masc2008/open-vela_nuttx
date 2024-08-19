@@ -395,6 +395,7 @@ static uint32_t tcp_recvhandler(FAR struct net_driver_s *dev,
                                 FAR void *pvpriv, uint32_t flags)
 {
   FAR struct tcp_recvfrom_s *pstate = pvpriv;
+  FAR struct iob_s *iob = NULL;
 
   ninfo("flags: %" PRIx32 "\n", flags);
 
@@ -410,11 +411,36 @@ static uint32_t tcp_recvhandler(FAR struct net_driver_s *dev,
 
           tcp_sender(dev, pstate);
 
+          if ((flags & TCP_ACKDATA) != 0)
+            {
+              iob = iob_tryalloc(false);
+              if (iob == NULL)
+                {
+                  nerr("ERROR: IOB alloc failed !\n");
+                  return flags;
+                }
+
+              iob_reserve(iob, CONFIG_NET_LL_GUARDSIZE);
+              int ret = iob_clone_partial(dev->d_iob, dev->d_iob->io_pktlen,
+                                          0, iob, 0, false, false);
+              if (ret < 0)
+                {
+                  iob_free_chain(iob);
+                  nerr("ERROR: IOB clone failed ret=%d!\n", ret);
+                  return flags;
+                }
+            }
+
           /* Copy the data from the packet (saving any unused bytes from the
            * packet in the read-ahead buffer).
            */
 
           flags = tcp_newdata(dev, pstate, flags);
+
+          if (iob != NULL)
+            {
+              netdev_iob_replace(dev, iob);
+            }
 
           /* Indicate that the data has been consumed and that an ACK
            * should be sent.

@@ -302,12 +302,12 @@ static void print_ec_cause(uint64_t esr)
 
   if (class_string && desc_string)
     {
-      serr("%s\n", class_string);
-      serr("%s\n", desc_string);
+      _err("%s\n", class_string);
+      _err("%s\n", desc_string);
     }
   else
     {
-      serr("UNRECOGNIZED EC\n");
+      _err("UNRECOGNIZED EC\n");
     }
 }
 
@@ -317,7 +317,7 @@ static int default_fatal_handler(uint64_t *regs, uint64_t far, uint64_t esr)
 
   /* Data Fault Status Code. */
 
-  serr("(IFSC/DFSC) for Data/Instruction aborts: %s\n", inf->name);
+  _err("(IFSC/DFSC) for Data/Instruction aborts: %s\n", inf->name);
 
   return -EINVAL; /* "fault" */
 }
@@ -326,7 +326,7 @@ static int default_debug_handler(uint64_t *regs, uint64_t far, uint64_t esr)
 {
   struct fatal_handle_info *inf = g_debug_handler + DBG_ESR_EVT(esr);
 
-  serr("Default Debug Handler: %s\n", inf->name);
+  _err("Default Debug Handler: %s\n", inf->name);
   return -1; /* "fault" */
 }
 
@@ -342,7 +342,7 @@ static int arm64_el1_pc(uint64_t *regs, uint64_t esr)
 {
   uint64_t far = read_sysreg(far_el1);
 
-  serr("SP/PC alignment exception at 0x%" PRIx64 "\n", far);
+  _err("SP/PC alignment exception at 0x%" PRIx64 "\n", far);
   return -EINVAL; /* "fault" */
 }
 
@@ -350,7 +350,7 @@ static int arm64_el1_bti(uint64_t *regs, uint64_t esr)
 {
   uint64_t far = read_sysreg(far_el1);
 
-  serr("BTI exception at 0x%" PRIx64 "\n", far);
+  _err("BTI exception at 0x%" PRIx64 "\n", far);
   return -EINVAL; /* "fault" */
 }
 
@@ -359,17 +359,17 @@ static int arm64_el1_undef(uint64_t *regs, uint64_t esr)
   uint32_t insn;
   uint64_t elr = regs[REG_ELR];
 
-  serr("Undefined instruction at 0x%" PRIx64 ", dump:\n", elr);
+  _err("Undefined instruction at 0x%" PRIx64 ", dump:\n", elr);
   memcpy(&insn, (void *)(elr - 8), 4);
-  serr("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr - 8, insn);
+  _err("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr - 8, insn);
   memcpy(&insn, (void *)(elr - 4), 4);
-  serr("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr - 4, insn);
+  _err("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr - 4, insn);
   memcpy(&insn, (void *)(elr), 4);
-  serr("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr, insn);
+  _err("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr, insn);
   memcpy(&insn, (void *)(elr + 4), 4);
-  serr("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr + 4, insn);
+  _err("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr + 4, insn);
   memcpy(&insn, (void *)(elr + 8), 4);
-  serr("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr + 8, insn);
+  _err("0x%" PRIx64 " : 0x%" PRIx32 "\n", elr + 8, insn);
 
   return -1;
 }
@@ -380,7 +380,7 @@ static int arm64_el1_fpac(uint64_t *regs, uint64_t esr)
 
   /* Unexpected FPAC exception in the kernel. */
 
-  serr("Unexpected FPAC exception at 0x%" PRIx64 "\n", far);
+  _err("Unexpected FPAC exception at 0x%" PRIx64 "\n", far);
   return -EINVAL;
 }
 
@@ -468,7 +468,7 @@ static int arm64_el1_exception_handler(uint64_t esr,
 
       default:
         {
-          serr("64-bit el1h sync, esr = 0x%x", ec);
+          _err("64-bit el1h sync, esr = 0x%x", ec);
           ret = -EINVAL;
         }
   }
@@ -532,10 +532,10 @@ static int arm64_exception_handler(uint64_t *regs)
 
   if (ret != 0)
     {
-      serr("CurrentEL: %s\n", el_str);
-      serr("ESR_ELn: 0x%" PRIx64 "\n", esr);
-      serr("FAR_ELn: 0x%" PRIx64 "\n", far);
-      serr("ELR_ELn: 0x%" PRIx64 "\n", elr);
+      _err("CurrentEL: %s\n", el_str);
+      _err("ESR_ELn: 0x%" PRIx64 "\n", esr);
+      _err("FAR_ELn: 0x%" PRIx64 "\n", far);
+      _err("ELR_ELn: 0x%" PRIx64 "\n", elr);
 
       print_ec_cause(esr);
     }
@@ -553,10 +553,13 @@ uint64_t *arm64_fatal_handler(uint64_t *regs)
   int ret;
 
   /* Nested exception are not supported */
-
-  DEBUGASSERT(!up_interrupt_context());
-
-  tcb->xcp.regs = (uint64_t *)regs;
+  if (up_current_regs() != NULL)
+  {
+    _err("Nested exception: %" PRIx64 ",current_regs: %" PRIx64 "\n", regs, up_current_regs());
+    regs = up_current_regs();
+  }
+  else
+    tcb->xcp.regs = (uint64_t *)regs;
 
   /* Set irq flag */
 

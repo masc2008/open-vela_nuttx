@@ -27,6 +27,14 @@
 
 #include <nuttx/config.h>
 #include <nuttx/timers/oneshot.h>
+#define CONFIG_ARM_TIMER_SECURE_IRQ         (GIC_PPI_INT_BASE + 13)
+#define CONFIG_ARM_TIMER_NON_SECURE_IRQ     (GIC_PPI_INT_BASE + 14)
+#define CONFIG_ARM_TIMER_VIRTUAL_IRQ        (GIC_PPI_INT_BASE + 11)
+#define CONFIG_ARM_TIMER_HYP_IRQ            (GIC_PPI_INT_BASE + 10)
+
+#define ARM_ARCH_TIMER_IRQ                  CONFIG_ARM_TIMER_VIRTUAL_IRQ
+#define ARM_ARCH_TIMER_PRIO                 IRQ_DEFAULT_PRIORITY
+#define ARM_ARCH_TIMER_FLAGS                IRQ_TYPE_LEVEL
 
 /****************************************************************************
  * Public Function Prototypes

@@ -33,7 +33,7 @@
 #include <nuttx/list.h>
 #include <nuttx/mutex.h>
 #include <nuttx/rpmsg/rpmsg.h>
-#include <nuttx/syslog/syslog_rpmsg.h>
+#include <nuttx/syslog/syslog.h>
 
 #include "syslog.h"
 #include "syslog_rpmsg.h"

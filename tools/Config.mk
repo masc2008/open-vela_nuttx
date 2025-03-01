@@ -755,7 +755,9 @@ ifeq ($(CONFIG_LIBCXX),y)
 else ifeq ($(CONFIG_UCLIBCXX),y)
   ARCHXXINCLUDES += ${INCSYSDIR_PREFIX}$(TOPDIR)$(DELIM)include$(DELIM)uClibc++
 else
+ifneq ($(CONFIG_LIBCXXTOOLCHAIN),y)
   ARCHXXINCLUDES += ${INCSYSDIR_PREFIX}$(TOPDIR)$(DELIM)include$(DELIM)cxx
+endif
   ifeq ($(CONFIG_ETL),y)
     ARCHXXINCLUDES += ${INCSYSDIR_PREFIX}$(TOPDIR)$(DELIM)include$(DELIM)etl
   endif

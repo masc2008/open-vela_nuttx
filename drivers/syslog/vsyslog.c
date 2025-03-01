@@ -88,6 +88,9 @@ int nx_vsyslog(int priority, FAR const IPTR char *fmt, FAR va_list *ap)
   int ret = 0;
 #ifdef CONFIG_SYSLOG_PROCESS_NAME
   FAR struct tcb_s *tcb = this_task();
+  FAR char *task_name = "IDLE";
+  if (OSINIT_TASK_READY())
+    task_name = get_task_name(tcb);
 #endif
 #ifdef CONFIG_SYSLOG_TIMESTAMP
   struct timespec ts;
@@ -248,7 +251,7 @@ int nx_vsyslog(int priority, FAR const IPTR char *fmt, FAR va_list *ap)
 #ifdef CONFIG_SYSLOG_PROCESS_NAME
   /* Prepend the thread name */
 
-                             , get_task_name(tcb)
+                             , task_name
 #endif
                     );
 

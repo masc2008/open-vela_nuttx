@@ -29,6 +29,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/clock.h>
 #include <nuttx/timers/arch_alarm.h>
+#include <debug.h>
 
 /****************************************************************************
  * Pre-processor Definitions

@@ -104,6 +104,10 @@ irqstate_t enter_critical_section(void)
   /* If CONFIG_SCHED_CRITMONITOR_MAXTIME_BUSYWAIT >= 0,
    * start counting time of busy-waiting.
    */
+  if (!OSINIT_TASK_READY()) {
+    up_irq_restore(flags);
+    return 0;
+  }
 
   nxsched_critmon_busywait(true, return_address(0));
 

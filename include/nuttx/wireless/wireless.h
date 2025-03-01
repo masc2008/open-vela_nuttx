@@ -142,6 +142,10 @@
 #define SIOCSIWPMKSA        _WLIOC(0x0036)  /* set PMKSA cache */
 #define SIOCGIWPMKSA        _WLIOC(0x0037)  /* get PMKSA cache */
 
+/* WIFI P2P */
+
+#define SIOCSIWP2P          _WLIOC(0x003b)  /* Set P2P operation */
+
 /* -------------------- DEV PRIVATE IOCTL LIST -------------------- */
 
 /* These 32 ioctl are wireless device private, for 16 commands.
@@ -196,7 +200,8 @@
                                    (cmd) == SIOCSIWENCODEEXT || \
                                    (cmd) == SIOCGIWENCODEEXT || \
                                    (cmd) == SIOCGIWESSID || \
-                                   (cmd) == SIOCSIWESSID)
+                                   (cmd) == SIOCSIWESSID || \
+                                   (cmd) == SIOCSIWP2P)
 
 /* --------------------------- WIRELESS EVENTS --------------------------- */
 
@@ -257,6 +262,7 @@
 #define IW_MODE_SECOND      5    /* Secondary master/repeater (backup) */
 #define IW_MODE_MONITOR     6    /* Passive monitor (listen only) */
 #define IW_MODE_MESH        7    /* Mesh (IEEE 802.11s) network */
+#define IW_MODE_P2P         8    /* Peer to peer / Wi-Fi Direct*/
 
 /* Statistics flags (bitmask in updated) */
 

@@ -802,7 +802,6 @@ endif
 clean: subdir_clean
 	$(call DELFILE, $(BIN))
 	$(call DELFILE, nuttx.*)
-	$(call DELFILE, *.map)
 	$(call DELFILE, _SAVED_APPS_config)
 	$(call DELFILE, nuttx-export*.zip)
 	$(call DELDIR, nuttx-export*)

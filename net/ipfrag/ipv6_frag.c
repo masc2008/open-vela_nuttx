@@ -76,6 +76,11 @@ static uint16_t ipv6_fragout_getunfraginfo(FAR struct iob_s *iob,
                                            uint16_t *hdroff,
                                            uint16_t *hdrtype);
 
+#if CONFIG_BES_IPSEC
+extern int ipsecdev_input_ip6_ipfrag(struct net_driver_s *dev);
+extern int ipsecdev_output_ip6_ipfrag(struct net_driver_s *dev, uint16_t *hdrtype, uint16_t *mtu);
+#endif
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -522,6 +527,16 @@ int32_t ipv6_fragin(FAR struct net_driver_s *dev)
 
       kmm_free(node);
 
+#if CONFIG_BES_IPSEC
+      /* in ims,only deal ipsec frag pack, 0x32 is IPSEC_ESP */
+      struct ipv6_hdr_s *ipv6 = (struct ipv6_hdr_s *)(dev->d_iob->io_data + dev->d_iob->io_offset);
+      if (ipv6->proto == 0x32)
+        {
+          /* fragment pack is ipsec-esp pack */
+          ipsecdev_input_ip6_ipfrag(dev);
+        }
+#endif
+
       return ipv6_input(dev);
     }
 
@@ -585,6 +600,12 @@ int32_t ipv6_fragout(FAR struct net_driver_s *dev, uint16_t mtu)
    */
 
   unfraglen = ipv6_fragout_getunfraginfo(dev->d_iob, &hdroff, &hdrtype);
+
+  /* Check whether the ip packet requires ipsec */
+
+#if CONFIG_BES_IPSEC
+  ipsecdev_output_ip6_ipfrag(dev, &hdrtype, &mtu);
+#endif
 
   /* Reconstruct I/O Buffer according to MTU, which will reserve
    * the space for the L3 header

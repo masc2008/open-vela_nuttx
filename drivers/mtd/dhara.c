@@ -441,6 +441,7 @@ static int dhara_geometry(FAR struct inode *inode,
 
   if (geometry)
     {
+      nxmutex_lock(&dev->lock);
       geometry->geo_available    = true;
       geometry->geo_mediachanged = false;
       geometry->geo_writeenabled = true;
@@ -467,9 +468,15 @@ static int dhara_ioctl(FAR struct inode *inode,
 {
   FAR dhara_dev_t *dev;
   int ret;
+  dhara_error_t err = 0;
 
   DEBUGASSERT(inode->i_private);
   dev = inode->i_private;
+
+  if (cmd == BIOC_FLUSH) {
+      finfo("dhra need to sync\n");
+      dhara_map_sync(&dev->map, &err);
+  }
 
   /* No other block driver ioctl commands are not recognized by this
    * driver.  Other possible MTD driver ioctl commands are passed through
@@ -632,7 +639,7 @@ int dhara_nand_read(FAR const struct dhara_nand *n,
   memcpy(data, cache->buffer + offset, length);
   cache->page = p;
   dhara_insert_readcache(dev, cache);
-  return ret;
+  return 0;
 }
 
 int dhara_nand_copy(FAR const struct dhara_nand *n,

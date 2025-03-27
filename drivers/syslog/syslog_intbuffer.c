@@ -126,6 +126,7 @@ static void syslog_flush_internal(bool force, size_t buflen)
             }
         }
       while (size > 0 && buflen > 0);
+      circbuf_reset(&ibuf->circ);
       ibuf->reading = false;
     }
 

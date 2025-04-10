@@ -71,7 +71,7 @@ nxevent_mask_t nxevent_tickwait_wait(FAR nxevent_t *event,
   int ret;
 
   DEBUGASSERT(event != NULL && wait != NULL &&
-              !up_interrupt_context());
+              (!up_interrupt_context() || delay == 0));
 
   waitany = !(eflags & NXEVENT_WAIT_ALL);
 
@@ -91,10 +91,11 @@ nxevent_mask_t nxevent_tickwait_wait(FAR nxevent_t *event,
 
   if (waitany && (events & event->events))
     {
-      events &= event->events;
-      if (!(eflags & NXEVENT_WAIT_NOCLEAR))
+      nxevent_mask_t events_bk = events;
+      events = event->events;
+      if ((eflags & NXEVENT_WAIT_NOCLEAR) == 0)
         {
-          event->events &= ~events;
+          event->events &= ~events_bk;
         }
     }
 

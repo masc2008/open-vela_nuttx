@@ -92,7 +92,14 @@ nxevent_mask_t nxevent_tickwait_wait(FAR nxevent_t *event,
   if (waitany && (events & event->events))
     {
       nxevent_mask_t events_bk = events;
-      events = event->events;
+      if ((eflags & NXEVENT_WAIT_VARIOUS) == 0)
+        {
+          events &= event->events;
+          events_bk = events;
+        }
+      else
+        events = event->events;
+
       if ((eflags & NXEVENT_WAIT_NOCLEAR) == 0)
         {
           event->events &= ~events_bk;

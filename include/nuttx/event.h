@@ -46,6 +46,7 @@
 #define NXEVENT_WAIT_ALL     (1ul << 0) /* Bit 0: Wait ALL */
 #define NXEVENT_WAIT_RESET   (1ul << 1) /* Bit 1: Reset events before wait */
 #define NXEVENT_WAIT_NOCLEAR (1ul << 2) /* Bit 2: Do not clear events after wait */
+#define NXEVENT_WAIT_VARIOUS (1ul << 3) /* Bit 3: Wait ANY return ALL */
 
 /* Event Post Flags */
 

@@ -107,7 +107,7 @@ int nxevent_post(FAR nxevent_t *event, nxevent_mask_t events,
                   ((wait->expect & event->events) == wait->expect)))
                 {
                   list_delete(&wait->node);
-
+                  nxevent_mask_t expect_bk = wait->expect;
                   ret = nxsem_post(&wait->sem);
                   if (ret < 0)
                     {
@@ -116,12 +116,19 @@ int nxevent_post(FAR nxevent_t *event, nxevent_mask_t events,
 
                   if (!waitall)
                     {
-                      wait->expect &= event->events;
+                      wait->expect = event->events;
+                      if ((wait->eflags & NXEVENT_WAIT_VARIOUS) == 0)
+                        {
+                          wait->expect &= event->events;
+                          expect_bk = wait->expect;
+                        }
+                      else
+                        wait->expect = event->events;
                     }
 
                   if (!(wait->eflags & NXEVENT_WAIT_NOCLEAR))
                     {
-                      clear |= wait->expect;
+                      clear |= expect_bk;
                     }
 
                   if (!postall && !(event->events & ~clear))

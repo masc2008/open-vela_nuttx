@@ -649,6 +649,7 @@ struct scscicmd_inquiry_s
   uint8_t control;       /* 5: Control */
 };
 #define SCSICMD_INQUIRY_SIZEOF 6
+#define SCSICMD_INQUIRY_MSSIZEOF 12 /* MS-Windows INQUIRY with cbw->cdblen == 12 */
 
 struct scsiresp_inquiry_s
 {

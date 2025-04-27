@@ -658,11 +658,24 @@ static inline int usbmsc_cmdinquiry(FAR struct usbmsc_dev_s *priv,
     (FAR struct scscicmd_inquiry_s *)priv->cdb;
   FAR struct scsiresp_inquiry_s *response =
     (FAR struct scsiresp_inquiry_s *)buf;
+  uint8_t cdblen;
   int len;
   int ret;
 
   priv->u.alloclen = usbmsc_getbe16(inquiry->alloclen);
-  ret = usbmsc_setupcmd(priv, SCSICMD_INQUIRY_SIZEOF,
+
+  /* Get the expected length of the command (with hack for MS-Windows 12-byte
+   * INQUIRY command.
+   */
+  cdblen = SCSICMD_INQUIRY_SIZEOF;
+  if (cdblen != priv->cdblen)
+  {
+    /* Try MS-Windows INQUIRY with cbw->cdblen == 12 */
+
+    cdblen = SCSICMD_INQUIRY_MSSIZEOF;
+  }
+
+  ret = usbmsc_setupcmd(priv, cdblen,
                         USBMSC_FLAGS_DIRDEVICE2HOST |
                         USBMSC_FLAGS_LUNNOTNEEDED |
                         USBMSC_FLAGS_UACOKAY);

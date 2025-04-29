@@ -146,6 +146,12 @@ void icmpv6_setaddresses(FAR struct net_driver_s *dev,
   netdev_ipv6_add(dev, addr, preflen);
   netlink_device_notify_ipaddr(dev, RTM_NEWADDR, AF_INET6, addr, preflen);
 
+#if defined(CONFIG_BES_MODEM_IMS_INTERFACE)
+  /* IMS volte not need netmask */
+  if (strncmp(dev->d_ifname, CONFIG_BES_MODEM_IMS_INTERFACE, IFNAMSIZ) == 0)
+      memset(dev->d_ipv6netmask, 0x00, sizeof(net_ipv6addr_t));
+#endif
+
   /* Finally, copy the router address */
 
   net_ipv6addr_copy(dev->d_ipv6draddr, draddr);

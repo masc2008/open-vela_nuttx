@@ -45,7 +45,7 @@ ifeq ($(CONFIG_USBDEV_TRACE_STRINGS),y)
 endif
 
 ifeq ($(CONFIG_RNDIS),y)
-  CSRCS += rndis.c
+  CSRCS += rndis.c rndis_dhcpd.c
 endif
 
 ifeq ($(CONFIG_DFU),y)

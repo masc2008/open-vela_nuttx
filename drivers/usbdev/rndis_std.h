@@ -58,6 +58,8 @@
 #define RNDIS_STATUS_SUCCESS                 0x00000000
 #define RNDIS_STATUS_FAILURE                 0xC0000001
 #define RNDIS_STATUS_NOT_SUPPORTED           0xC00000BB
+#define RNDIS_STATUS_MEDIA_CONNECT           0x4001000B
+#define RNDIS_STATUS_MEDIA_DISCONNECT        0x4001000C
 
 /* ObjectIDs for query commands */
 
@@ -183,7 +185,7 @@ struct rndis_indicate_msg
   uint32_t status;        /* Status */
   uint32_t buflen;        /* StatusBufferLength */
   uint32_t bufoffset;     /* StatusBufferOffset */
-  uint32_t buffer[];      /* Buffer */
+  // uint32_t buffer[];      /* Buffer */
 };
 
 struct rndis_packet_msg

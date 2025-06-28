@@ -215,10 +215,10 @@ define LINK_ALLSYMS_KASAN
 		$(LDSTARTGROUP) $(LDLIBS) $(EXTRA_LIBS) $(LDENDGROUP)
 endef
 
-$(addsuffix .tmp,$(ARCHSCRIPT)): $(ARCHSCRIPT)
+$(addsuffix .tmp,$(ARCHSCRIPT)): $(ARCHSCRIPT) board$(DELIM)libboard$(LIBEXT)
 	$(call PREPROCESS, $(patsubst %.tmp,%,$@), $@)
 
-nuttx$(EXEEXT): $(HEAD_OBJ) board$(DELIM)libboard$(LIBEXT) $(addsuffix .tmp,$(ARCHSCRIPT))
+nuttx$(EXEEXT): $(HEAD_OBJ) $(addsuffix .tmp,$(ARCHSCRIPT))
 	$(Q) echo "LD: nuttx"
 ifeq ($(CONFIG_ALLSYMS)$(CONFIG_MM_KASAN_GLOBAL),)
 	$(Q) $(LD) $(LDFLAGS) $(LIBPATHS) $(EXTRA_LIBPATHS) \

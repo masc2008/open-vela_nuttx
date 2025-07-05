@@ -176,6 +176,9 @@
 #define SIOCSIWPTAPRIO      (SIOCIWFIRSTPRIV + 6)       /* Set PTA priority type */
 #define SIOCGIWPTAPRIO      (SIOCIWFIRSTPRIV + 7)       /* Get PTA priority type */
 
+/* BES priv status */
+#define SIOCGIWBESPRIV      (SIOCIWFIRSTPRIV + 8)       /* Get BES priv status */
+
 #define SIOCIWLASTPRIV      _WLIOC(0x00ff)
 
 /* ------------------------- IOCTL STUFF ------------------------- */

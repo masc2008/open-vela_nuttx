@@ -72,6 +72,10 @@ ifeq ($(CONFIG_USBDEV_FS),y)
   CSRCS += usbdev_fs.c
 endif
 
+ifeq ($(CONFIG_USBMOUSE),y)
+  CSRCS += hidmouse.c
+endif
+
 CSRCS += composite.c usbdev_desc.c usbdev_req.c
 CSRCS += usbdev_trace.c usbdev_trprintf.c
 

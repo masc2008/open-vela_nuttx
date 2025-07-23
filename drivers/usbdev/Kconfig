@@ -2004,4 +2004,42 @@ config USBMTP_INTERFACESTR
 
 endif # USBMTP
 
+menuconfig USBMOUSE
+	bool "USB HID MOUSE support"
+	default n
+	---help---
+		Enables USB HID CLASS MOUSE support
+
+if USBMOUSE
+
+config USBMOUSE_FSEPINTIN_INTERVAL
+	int "Interrupt FS IN poll interval"
+	default 4
+	---help---
+		The poll interval for the Interrupt IN endpoint, Default 4.
+
+config USBMOUSE_HSEPINTIN_INTERVAL
+	int "Interrupt HS IN poll interval"
+	default 8
+	---help---
+		The poll interval for the Interrupt IN endpoint, Default 8.
+
+config USBMOUSE_EPINTIN_SIZE
+		int "Interrupt IN MAXPACKET size"
+		default 7
+		---help---
+			Max package size for the Interrupt IN endpoint, Default 7.
+
+config USBMOUSE_NWRREQS
+		int "Number of write requests that can be in flight"
+		default 4
+		---help---
+			The number of write/read requests that can be in flight
+
+config USBMOUSE_INTERFACESTR
+	string "Interface descriptor string"
+	default "MOUSE Interface"
+
+endif # USBMOUSE
+
 endif # USBDEV

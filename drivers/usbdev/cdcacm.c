@@ -1506,6 +1506,11 @@ static void cdcacm_unbind(FAR struct usbdevclass_driver_s *driver,
           priv->nwrq++;
         }
 #else
+      if (priv->wrcontainer)
+        {
+          sq_addlast((FAR sq_entry_t *)priv->wrcontainer, &priv->txfree);
+          priv->nwrq++;
+        }
       DEBUGASSERT(priv->nwrq == CONFIG_CDCACM_NWRREQS);
 #endif
 

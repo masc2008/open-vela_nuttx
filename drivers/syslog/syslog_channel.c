@@ -267,10 +267,17 @@ static struct notifier_block g_default_channel_nb =
 #  define SYSLOG_RTT_AVAILABLE 0
 #endif
 
+#ifdef CONFIG_SYSLOG_CDCACM
+#  define SYSLOG_CDCACM_AVAILABLE 1
+#else
+#  define SYSLOG_CDCACM_AVAILABLE 0
+#endif
+
 #define SYSLOG_NCHANNELS (SYSLOG_DEFAULT_AVAILABLE + \
                           RAMLOG_SYSLOG_AVAILABLE + \
                           SYSLOG_RPMSG_AVAILABLE + \
-                          SYSLOG_RTT_AVAILABLE)
+                          SYSLOG_RTT_AVAILABLE + \
+                          SYSLOG_CDCACM_AVAILABLE)
 
 #if SYSLOG_NCHANNELS > CONFIG_SYSLOG_MAX_CHANNELS
 #  error "Maximum channel number exceeds."

@@ -627,7 +627,9 @@ static int rndis_submit_rdreq(FAR struct rndis_dev_s *priv)
   uinfo("rndis_debug enter, rdreq_submitted:%d rx_blocked:%d\n", priv->rdreq_submitted, priv->rx_blocked);
   if (!priv->rdreq_submitted && !priv->rx_blocked)
     {
-      priv->rdreq->len = priv->epbulkout->maxpacket;
+      /* Check priv->rdreq->len */
+      DEBUGASSERT(priv->rdreq->len >= priv->epbulkout->maxpacket);
+      DEBUGASSERT(priv->rdreq->len % priv->epbulkout->maxpacket == 0);
       ret = EP_SUBMIT(priv->epbulkout, priv->rdreq);
       if (ret != OK)
         {
@@ -2192,7 +2194,7 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
           if ((false == rndis_conn_stat_cur) && (true == rndis_conn_stat_expect))
           {
             uinfo("*****************");
-            uinfo("*******wifi connected**********");
+            uinfo("*******RNDIS connected**********");
             uinfo("*****************");
 
             usbclass_setconfig(priv, RNDIS_CONFIGID);
@@ -2207,7 +2209,7 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
           else if ((true == rndis_conn_stat_cur) && (false == rndis_conn_stat_expect))
           {
             uinfo("*****************");
-            uinfo("*******wifi disconnected**********");
+            uinfo("*******RNDIS disconnected**********");
             uinfo("*****************");
             resp = rndis_prepare_indicate_status(priv, respsize, cmd_hdr, RNDIS_STATUS_MEDIA_DISCONNECT);
             if (!resp) {
@@ -2635,7 +2637,7 @@ static int usbclass_bind(FAR struct usbdevclass_driver_s *driver,
 {
   FAR struct rndis_dev_s *priv = ((FAR struct rndis_driver_s *)driver)->dev;
   FAR struct rndis_req_s *reqcontainer;
-  size_t reqlen;
+  size_t reqlen, size = 0;
   int ret;
   int i;
 
@@ -2728,7 +2730,6 @@ static int usbclass_bind(FAR struct usbdevclass_driver_s *driver,
   priv->epbulkout->priv = priv;
 
   /* Pre-allocate read requests.  The buffer size is one full packet. */
-
 #if defined(CONFIG_USBDEV_SUPERSPEED)
   if (dev->speed == USB_SPEED_SUPER ||
       dev->speed == USB_SPEED_SUPER_PLUS)
@@ -2742,6 +2743,8 @@ static int usbclass_bind(FAR struct usbdevclass_driver_s *driver,
         {
           reqlen = CONFIG_RNDIS_EPBULKOUT_SSSIZE * USB_SS_BULK_EP_MAXBURST;
         }
+
+      size = CONFIG_RNDIS_EPBULKOUT_SSSIZE;
     }
   else
 #endif
@@ -2749,11 +2752,13 @@ static int usbclass_bind(FAR struct usbdevclass_driver_s *driver,
   if (dev->speed == USB_SPEED_HIGH)
     {
       reqlen = CONFIG_RNDIS_EPBULKOUT_HSSIZE;
+      size = CONFIG_RNDIS_EPBULKOUT_HSSIZE;
     }
   else
 #endif
     {
       reqlen = CONFIG_RNDIS_EPBULKOUT_FSSIZE;
+      size = CONFIG_RNDIS_EPBULKOUT_FSSIZE;
     }
 
   if (CONFIG_RNDIS_BULKOUT_REQLEN > reqlen)
@@ -2761,6 +2766,7 @@ static int usbclass_bind(FAR struct usbdevclass_driver_s *driver,
       reqlen = CONFIG_RNDIS_BULKOUT_REQLEN;
     }
 
+  reqlen = (reqlen + size - 1) / size * size;
   priv->rdreq = usbdev_allocreq(priv->epbulkout, reqlen);
   if (priv->rdreq == NULL)
     {

@@ -457,7 +457,7 @@ FAR struct net_driver_s *netdev_findby_ripv6addr(
    *       matched and it will disable further routing lookup.
    */
 
-  dev = netdev_prefixlen_findby_lipv6addr(ripaddr, &prefixlen);
+  dev = netdev_prefixlen_findby_lipv6addr(lipaddr, &prefixlen);
 
 #ifdef CONFIG_NET_ROUTE
   /* If we have a routing table, then perhaps we can find the local

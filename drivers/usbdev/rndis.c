@@ -508,6 +508,7 @@ extern FAR struct dhcpd_state_s g_ds_data;
 struct rndis_netpkt_s rndis_netpackets[CONFIG_RNDIS_NWRREQS];
 struct sq_queue_s rndis_free_netpkt_lst;     /* List of free netpackets containers */
 struct sq_queue_s rndis_pending_netpkt_lst;  /* List of pending netpackets containers */
+static sem_t pending_netpkt_sem;
 
 #define MEDIA_LL_TYPE       ((!g_media_netdev) ? NET_LL_IEEE80211 : g_media_netdev->d_lltype)
 #define MEDIA_LL_HDRLEN     ((!g_media_netdev) ? ETH_HDRLEN : NET_LL_HDRLEN(g_media_netdev))
@@ -1317,6 +1318,7 @@ static int rndis_rxdispatch_task_run(int argc, char **argv)
 
   do
   {
+    sem_wait(&pending_netpkt_sem);
     netpkt = rndis_remfirstpendingnetpkts(priv);
     if (NULL == netpkt)
     {
@@ -1836,6 +1838,7 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
             rndis_block_rx(priv);
             uinfo("rndis_addpendingnetpkts\n");
             rndis_addpendingnetpkts(priv);
+            sem_post(&pending_netpkt_sem);
             priv->rndis_host_tx_count++;
             rndis_unblock_rx(priv);
           }
@@ -3693,6 +3696,7 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev)
       leave_critical_section(flags);
     }
 
+  sem_init(&pending_netpkt_sem, 0, 0);
   int pid = task_create("rndis_rxdispatch", 128, CONFIG_DEFAULT_TASK_STACKSIZE, rndis_rxdispatch_task_run, NULL);
   if (pid < 0)
   {

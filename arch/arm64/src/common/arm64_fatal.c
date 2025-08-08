@@ -553,7 +553,10 @@ uint64_t *arm64_fatal_handler(uint64_t *regs)
   int ret;
 
   /* Nested exception are not supported */
-  if (up_current_regs() != NULL)
+  if (tcb == NULL) {
+      _err("tcb is NUL, exception: %" PRIx64 "\n", regs);
+  }
+  else if (up_current_regs() != NULL)
   {
     _err("Nested exception: %" PRIx64 ",current_regs: %" PRIx64 "\n", regs, up_current_regs());
     regs = up_current_regs();

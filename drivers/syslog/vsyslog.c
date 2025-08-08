@@ -89,7 +89,7 @@ int nx_vsyslog(int priority, FAR const IPTR char *fmt, FAR va_list *ap)
 #ifdef CONFIG_SYSLOG_PROCESS_NAME
   FAR struct tcb_s *tcb = this_task();
   FAR char *task_name = "IDLE";
-  if (OSINIT_TASK_READY())
+  if (tcb != NULL && OSINIT_TASK_READY())
     task_name = get_task_name(tcb);
 #endif
 #ifdef CONFIG_SYSLOG_TIMESTAMP
@@ -142,6 +142,11 @@ int nx_vsyslog(int priority, FAR const IPTR char *fmt, FAR va_list *ap)
       gmtime_r(&ts.tv_sec, &tm);
 #    endif
 #  endif
+    }
+    else {
+        uint64_t nsec = up_early_gettime_us() * 1000;
+        ts.tv_sec  = nsec / NSEC_PER_SEC;
+        ts.tv_nsec = nsec % NSEC_PER_SEC;
     }
 
 #  if defined(CONFIG_SYSLOG_TIMESTAMP_FORMATTED)

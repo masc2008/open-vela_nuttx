@@ -437,3 +437,18 @@ void weak_function up_ndelay(unsigned long nanoseconds)
       udelay_coarse((nanoseconds + NSEC_PER_USEC - 1) / NSEC_PER_USEC);
     }
 }
+
+clock_t weak_function up_early_gettime_us(void)
+{
+#ifdef __ARM_ARCH_ISA_A64
+  static uint32_t cycle_per_tick = 0;
+  if (cycle_per_tick == 0)  cycle_per_tick = read_sysreg(cntfrq_el0);
+  return (uint64_t) (read_sysreg(cntvct_el0) * 1000 * 1000 / cycle_per_tick);
+#elif defined(__ARM_ARCH_ISA_ARM)
+  static uint32_t cycle_per_tick = 0;
+  if (cycle_per_tick == 0)  cycle_per_tick = CP15_GET(CNTFRQ);
+  return (uint64_t) (CP15_GET64(CNTPCT) * 1000 * 1000 / cycle_per_tick);
+#else
+  return 0;
+#endif
+}

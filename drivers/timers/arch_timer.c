@@ -478,3 +478,8 @@ void weak_function up_ndelay(unsigned long nanoseconds)
 {
   up_udelay((nanoseconds + NSEC_PER_USEC - 1) / NSEC_PER_USEC);
 }
+
+clock_t weak_function up_early_gettime_us(void)
+{
+  return 0;
+}

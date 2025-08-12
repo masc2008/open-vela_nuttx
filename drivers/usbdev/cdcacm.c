@@ -2895,6 +2895,20 @@ static void cdcuart_txint(FAR struct uart_dev_s *dev, bool enable)
     {
       cdcacm_sndpacket(priv);
     }
+  while (!priv->wrcontainer)
+    {
+      if (up_interrupt_context() || sched_idletask())
+        {
+          irqstate_t flags;
+          flags = enter_critical_section();
+          cdcuart_txready(dev);
+          leave_critical_section(flags);
+        }
+      else
+        {
+          usleep(1000);
+        }
+    }
 }
 
 /****************************************************************************

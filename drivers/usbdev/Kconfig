@@ -1788,6 +1788,13 @@ config USBDEV_FS_NEP0REQS
 	---help---
 		The number of ep0 requests that can be in flight
 
+config USBDEV_FS_CUSTOM_BULKSIZE
+	int "Size of one write/read request buffer"
+	default 0
+	---help---
+		Ideally, the BULK request size should *not* be the same size as
+		the maxpacket size.
+
 endif #USBDEV_FS
 
 menuconfig USBMTP

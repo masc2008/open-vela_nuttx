@@ -239,7 +239,7 @@ static int usbdev_fs_submit_rdreq(FAR struct usbdev_ep_s *ep,
 {
   FAR struct usbdev_req_s *req = container->req;
 
-  req->len = ep->maxpacket;
+  req->len = MAX(CONFIG_USBDEV_FS_CUSTOM_BULKSIZE, ep->maxpacket);
   return EP_SUBMIT(ep, req);
 }
 
@@ -735,6 +735,7 @@ static ssize_t usbdev_fs_write(FAR struct file *filep,
   FAR struct usbdev_fs_req_s *container;
   FAR struct usbdev_req_s *req;
   irqstate_t flags;
+  int reqlen = 0;
   int wlen = 0;
   int ret;
 
@@ -795,9 +796,11 @@ static ssize_t usbdev_fs_write(FAR struct file *filep,
 
       /* Fill the request with data */
 
-      if (len > fs_ep->ep->maxpacket)
+      reqlen = MAX(CONFIG_USBDEV_FS_CUSTOM_BULKSIZE, fs_ep->ep->maxpacket);
+
+      if (len > reqlen)
         {
-          cur_len = fs_ep->ep->maxpacket;
+          cur_len = reqlen;
         }
       else
         {
@@ -1000,6 +1003,9 @@ static int usbdev_fs_ep_bind(FAR struct usbdev_s *dev, uint8_t epno,
   size_t reqsize = epinfo->hssize;
 #else
   size_t reqsize = epinfo->fssize;
+#endif
+#if (CONFIG_USBDEV_FS_CUSTOM_BULKSIZE > 0)
+  reqsize = MAX(CONFIG_USBDEV_FS_CUSTOM_BULKSIZE, reqsize);
 #endif
   uint16_t i;
 

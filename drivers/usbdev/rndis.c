@@ -191,6 +191,8 @@ struct rndis_dev_s
 
   size_t response_queue_words;           /* Count of words waiting in response_queue. */
   uint32_t response_queue[RNDIS_RESP_QUEUE_WORDS];
+  uint32_t status;                       /* Status indicator */
+  sem_t send_sem;                        /* Send RNDIS packet semaphore */
 };
 
 /* The internal version of the class driver */
@@ -508,7 +510,55 @@ extern FAR struct dhcpd_state_s g_ds_data;
 struct rndis_netpkt_s rndis_netpackets[CONFIG_RNDIS_NWRREQS];
 struct sq_queue_s rndis_free_netpkt_lst;     /* List of free netpackets containers */
 struct sq_queue_s rndis_pending_netpkt_lst;  /* List of pending netpackets containers */
-static sem_t pending_netpkt_sem;
+
+#define RNDIS_NETWORK_LINK_UP   (0x1 << 0)
+#define RNDIS_NETWORK_LINK_DOWN (0x1 << 1)
+
+static void rndis_clear_status_flag(uint32_t flag)
+{
+  struct rndis_dev_s *priv = NULL;
+
+  if (g_rndis_netdev)
+  {
+    priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
+
+    priv->status &= (~flag);
+  }
+}
+
+static uint32_t rndis_check_status_flag(uint32_t flag)
+{
+  struct rndis_dev_s *priv = NULL;
+
+  if (g_rndis_netdev)
+  {
+    priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
+
+    return (priv->status & flag);
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+static void rndis_set_status_flag(uint32_t flag)
+{
+  struct rndis_dev_s *priv = NULL;
+
+  if (g_rndis_netdev)
+  {
+    priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
+
+    priv->status |= flag;
+  }
+}
+
+#if defined(CONFIG_BES_MODEM)
+extern bool RIL_InterfaceGetState(char *name);
+typedef void (*intf_state_update_cb_t)(char *name, bool up);
+extern void RIL_RegisterInterfaceStateUpdate(intf_state_update_cb_t cb);
+#endif
 
 #define MEDIA_LL_TYPE       ((!g_media_netdev) ? NET_LL_IEEE80211 : g_media_netdev->d_lltype)
 #define MEDIA_LL_HDRLEN     ((!g_media_netdev) ? ETH_HDRLEN : NET_LL_HDRLEN(g_media_netdev))
@@ -1318,7 +1368,7 @@ static int rndis_rxdispatch_task_run(int argc, char **argv)
 
   do
   {
-    sem_wait(&pending_netpkt_sem);
+    nxsem_wait(&priv->send_sem);
     netpkt = rndis_remfirstpendingnetpkts(priv);
     if (NULL == netpkt)
     {
@@ -1406,11 +1456,37 @@ void rndis_set_media_netdev(FAR struct net_driver_s *netdev)
     g_media_netdev = netdev;
 }
 
-void rndis_notify_netdev_conn_stat(bool connected)
+static void rndis_notify_netdev_conn_stat(char *name, bool connected)
 {
-  int ret = 0;
-  uinfo("notify %d", connected);
-  rndis_conn_stat_expect = connected;
+  uinfo("notify name:%s connected:%d", name, connected);
+
+  if (g_media_netdev && (!strcmp(name, g_media_netdev->d_ifname)))
+  {
+    if (g_rndis_netdev)
+    {
+      if (connected == false)
+      {
+        if (!rndis_check_status_flag(RNDIS_NETWORK_LINK_DOWN))
+          rndis_set_status_flag(RNDIS_NETWORK_LINK_DOWN);
+      }
+      else
+      {
+        if (!rndis_check_status_flag(RNDIS_NETWORK_LINK_UP))
+          rndis_set_status_flag(RNDIS_NETWORK_LINK_UP);
+      }
+    }
+    else
+    {
+      rndis_conn_stat_expect = connected;
+    }
+  }
+  else
+  {
+    if (g_media_netdev)
+      uerr("notify name:%s connected:%d d_ifname:%s", name, connected, g_media_netdev->d_ifname);
+    else
+      uerr("notify name:%s connected:%d g_media_netdev == NULL", name, connected);
+  }
 }
 
 bool rndis_is_inited(void)
@@ -1730,6 +1806,8 @@ static int rndis_txavail(FAR struct net_driver_s *dev)
 static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
                                    FAR uint8_t *reqbuf, uint16_t reqlen)
 {
+  int ret = 0;
+
   if (!rndis_allocnetpkts(priv))
     {
       uerr("no free netpkt\n");
@@ -1838,7 +1916,11 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
             rndis_block_rx(priv);
             uinfo("rndis_addpendingnetpkts\n");
             rndis_addpendingnetpkts(priv);
-            sem_post(&pending_netpkt_sem);
+            ret = nxsem_post(&priv->send_sem);
+            if (ret)
+              {
+                uerr("nxsem_post failed! ret: %d\n", ret);
+              }
             priv->rndis_host_tx_count++;
             rndis_unblock_rx(priv);
           }
@@ -2194,7 +2276,32 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
         {
           FAR struct rndis_response_header *resp;
           size_t respsize = sizeof(struct rndis_indicate_msg);
-          if ((false == rndis_conn_stat_cur) && (true == rndis_conn_stat_expect))
+          uinfo("RNDIS keepalive priv->status:%d", priv->status);
+
+          if (((true == rndis_conn_stat_cur) && (false == rndis_conn_stat_expect))
+              || rndis_check_status_flag(RNDIS_NETWORK_LINK_DOWN))
+          {
+            uinfo("*****************");
+            uinfo("*******RNDIS disconnected**********");
+            uinfo("*****************");
+
+            resp = rndis_prepare_indicate_status(priv, respsize, cmd_hdr, RNDIS_STATUS_MEDIA_DISCONNECT);
+            if (!resp)
+              return -ENOMEM;
+            rndis_send_encapsulated_response(priv, respsize);
+
+            if (rndis_check_status_flag(RNDIS_NETWORK_LINK_DOWN))
+            {
+              rndis_clear_status_flag(RNDIS_NETWORK_LINK_DOWN);
+            }
+            else
+            {
+              rndis_conn_stat_cur = rndis_conn_stat_expect;
+            }
+            break;
+          }
+          else if (((false == rndis_conn_stat_cur) && (true == rndis_conn_stat_expect))
+                   || rndis_check_status_flag(RNDIS_NETWORK_LINK_UP))
           {
             uinfo("*****************");
             uinfo("*******RNDIS connected**********");
@@ -2202,24 +2309,18 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
 
             usbclass_setconfig(priv, RNDIS_CONFIGID);
             resp = rndis_prepare_indicate_status(priv, respsize, cmd_hdr, RNDIS_STATUS_MEDIA_CONNECT);
-            if (!resp) {
-                return -ENOMEM;
-            }
-            rndis_conn_stat_cur = rndis_conn_stat_expect;
+            if (!resp)
+              return -ENOMEM;
             rndis_send_encapsulated_response(priv, respsize);
-            break;
-          }
-          else if ((true == rndis_conn_stat_cur) && (false == rndis_conn_stat_expect))
-          {
-            uinfo("*****************");
-            uinfo("*******RNDIS disconnected**********");
-            uinfo("*****************");
-            resp = rndis_prepare_indicate_status(priv, respsize, cmd_hdr, RNDIS_STATUS_MEDIA_DISCONNECT);
-            if (!resp) {
-                return -ENOMEM;
+
+            if (rndis_check_status_flag(RNDIS_NETWORK_LINK_UP))
+            {
+              rndis_clear_status_flag(RNDIS_NETWORK_LINK_UP);
             }
-            rndis_conn_stat_cur = rndis_conn_stat_expect;
-            rndis_send_encapsulated_response(priv, respsize);
+            else
+            {
+              rndis_conn_stat_cur = rndis_conn_stat_expect;
+            }
             break;
           }
 
@@ -2847,6 +2948,13 @@ static int usbclass_bind(FAR struct usbdevclass_driver_s *driver,
       while (nxmutex_lock(&priv->lock) < 0);
       sq_addlast((FAR sq_entry_t *)reqcontainer, &priv->reqlist);
       nxmutex_unlock(&priv->lock);
+    }
+
+  ret = nxsem_init(&priv->send_sem, 0, 0);
+  if (ret != OK)
+    {
+      uerr("nxsem_init failed. ret: %d\n", ret);
+      goto errout;
     }
 
   /* Initialize response queue to empty */
@@ -3696,12 +3804,19 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev)
       leave_critical_section(flags);
     }
 
-  sem_init(&pending_netpkt_sem, 0, 0);
   int pid = task_create("rndis_rxdispatch", 128, CONFIG_DEFAULT_TASK_STACKSIZE, rndis_rxdispatch_task_run, NULL);
   if (pid < 0)
   {
     uerr("ERROR: Failed to start the rndis_rxdispatch task.\n");
   }
 
+#if defined(CONFIG_BES_MODEM)
+  RIL_RegisterInterfaceStateUpdate(rndis_notify_netdev_conn_stat);
+
+  if (g_media_netdev)
+    rndis_conn_stat_expect = RIL_InterfaceGetState(g_media_netdev->d_ifname);
+  else
+    rndis_conn_stat_expect = RIL_InterfaceGetState(CONFIG_BES_MODEM_NET_INTERFACE);
+#endif
 }
 #endif

@@ -511,11 +511,38 @@ struct rndis_netpkt_s rndis_netpackets[CONFIG_RNDIS_NWRREQS];
 struct sq_queue_s rndis_free_netpkt_lst;     /* List of free netpackets containers */
 struct sq_queue_s rndis_pending_netpkt_lst;  /* List of pending netpackets containers */
 
-#define RNDIS_NETWORK_LINK_UP   (0x1 << 0)
-#define RNDIS_NETWORK_LINK_DOWN (0x1 << 1)
+#define RNDIS_INIT              (0x1 << 0)
+#define RNDIS_CONN              (0x1 << 1)
+#define RNDIS_DISCONN           (0x1 << 2)
+#define RNDIS_HALT              (0x1 << 3)
+#define RNDIS_RECONN            (0x1 << 4)
+#define RNDIS_RESET             (0x1 << 5)
+#define RNDIS_NETWORK_LINK_UP   (0x1 << 6)
+#define RNDIS_NETWORK_LINK_DOWN (0x1 << 7)
 
-static void rndis_clear_status_flag(uint32_t flag)
+static int rndis_clear_status(void)
 {
+  int ret = 0;
+  struct rndis_dev_s *priv = NULL;
+
+  if (g_rndis_netdev)
+  {
+    priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
+
+    priv->status = 0;
+  }
+  else
+  {
+    uwarn("g_rndis_netdev == NULL");
+    ret = -EINVAL;
+  }
+
+  return ret;
+}
+
+static int rndis_clear_status_flag(uint32_t flag)
+{
+  int ret = 0;
   struct rndis_dev_s *priv = NULL;
 
   if (g_rndis_netdev)
@@ -524,6 +551,13 @@ static void rndis_clear_status_flag(uint32_t flag)
 
     priv->status &= (~flag);
   }
+  else
+  {
+    uwarn("g_rndis_netdev == NULL");
+    ret = -EINVAL;
+  }
+
+  return ret;
 }
 
 static uint32_t rndis_check_status_flag(uint32_t flag)
@@ -542,8 +576,9 @@ static uint32_t rndis_check_status_flag(uint32_t flag)
   }
 }
 
-static void rndis_set_status_flag(uint32_t flag)
+static int rndis_set_status_flag(uint32_t flag)
 {
+  int ret = 0;
   struct rndis_dev_s *priv = NULL;
 
   if (g_rndis_netdev)
@@ -552,6 +587,13 @@ static void rndis_set_status_flag(uint32_t flag)
 
     priv->status |= flag;
   }
+  else
+  {
+    uwarn("g_rndis_netdev == NULL");
+    ret = -EINVAL;
+  }
+
+  return ret;
 }
 
 #if defined(CONFIG_BES_MODEM)
@@ -2067,13 +2109,30 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
 {
   FAR struct rndis_command_header *cmd_hdr =
     (FAR struct rndis_command_header *)dataout;
+  uint32_t linkup, linkdown;
+  bool status_changed = false;
 
+  linkup = rndis_check_status_flag(RNDIS_NETWORK_LINK_UP);
+  linkdown = rndis_check_status_flag(RNDIS_NETWORK_LINK_DOWN);
   switch (cmd_hdr->msgtype)
     {
       case RNDIS_INITIALIZE_MSG:
         {
           FAR struct rndis_initialize_cmplt *resp;
           size_t respsize = sizeof(struct rndis_initialize_cmplt);
+
+          uinfo("RNDIS_INITIALIZE_MSG");
+          if (rndis_check_status_flag(RNDIS_HALT))
+            {
+              rndis_clear_status();
+              rndis_set_status_flag(RNDIS_RECONN);
+            }
+          else
+            {
+              rndis_clear_status();
+              rndis_set_status_flag(RNDIS_INIT);
+            }
+          status_changed = true;
 
           resp = rndis_prepare_response(priv, respsize, cmd_hdr);
           if (!resp)
@@ -2099,6 +2158,10 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
           priv->response_queue_words = 0;
           priv->connected = false;
           rndis_inited = false;
+
+          rndis_clear_status();
+          rndis_set_status_flag(RNDIS_HALT);
+          status_changed = true;
         }
         break;
 
@@ -2227,14 +2290,26 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
 
               if (req->buffer[0] == 0)
                 {
+                  uinfo("Message set RNDIS to disconnect");
                   priv->connected = false;
                   rndis_inited = false;
+
+                  rndis_clear_status();
+                  rndis_set_status_flag(RNDIS_DISCONN);
+                  status_changed = true;
                 }
               else
                 {
-                  uinfo("RNDIS is now connected");
+                  uinfo("Message set RNDIS to connect");
                   priv->connected = true;
                   rndis_inited = true;
+
+                  if (!rndis_check_status_flag(RNDIS_RECONN))
+                    {
+                      rndis_clear_status();
+                      rndis_set_status_flag(RNDIS_CONN);
+                      status_changed = true;
+                    }
                 }
             }
           else if (req->objid == RNDIS_OID_802_3_MULTICAST_LIST)
@@ -2256,6 +2331,10 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
           uinfo("RNDIS_RESET_MSG");
           FAR struct rndis_reset_cmplt *resp;
           size_t respsize = sizeof(struct rndis_reset_cmplt);
+
+          rndis_clear_status();
+          rndis_set_status_flag(RNDIS_RESET);
+          status_changed = true;
 
           priv->response_queue_words = 0;
           resp = rndis_prepare_response(priv, respsize, cmd_hdr);
@@ -2291,17 +2370,18 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
             rndis_send_encapsulated_response(priv, respsize);
 
             if (rndis_check_status_flag(RNDIS_NETWORK_LINK_DOWN))
-            {
-              rndis_clear_status_flag(RNDIS_NETWORK_LINK_DOWN);
-            }
+              {
+                rndis_clear_status_flag(RNDIS_NETWORK_LINK_DOWN);
+              }
             else
-            {
-              rndis_conn_stat_cur = rndis_conn_stat_expect;
-            }
+              {
+                rndis_conn_stat_cur = rndis_conn_stat_expect;
+              }
             break;
           }
           else if (((false == rndis_conn_stat_cur) && (true == rndis_conn_stat_expect))
-                   || rndis_check_status_flag(RNDIS_NETWORK_LINK_UP))
+                   || rndis_check_status_flag(RNDIS_NETWORK_LINK_UP)
+                   || rndis_check_status_flag(RNDIS_RECONN))
           {
             uinfo("*****************");
             uinfo("*******RNDIS connected**********");
@@ -2313,14 +2393,19 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
               return -ENOMEM;
             rndis_send_encapsulated_response(priv, respsize);
 
-            if (rndis_check_status_flag(RNDIS_NETWORK_LINK_UP))
-            {
-              rndis_clear_status_flag(RNDIS_NETWORK_LINK_UP);
-            }
+            if (rndis_check_status_flag(RNDIS_RECONN))
+              {
+                rndis_clear_status_flag(RNDIS_RECONN);
+                rndis_set_status_flag(RNDIS_CONN);
+              }
+            else if (rndis_check_status_flag(RNDIS_NETWORK_LINK_UP))
+              {
+                rndis_clear_status_flag(RNDIS_NETWORK_LINK_UP);
+              }
             else
-            {
-              rndis_conn_stat_cur = rndis_conn_stat_expect;
-            }
+              {
+                rndis_conn_stat_cur = rndis_conn_stat_expect;
+              }
             break;
           }
 
@@ -2337,6 +2422,14 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
       default:
         uwarn("Unsupported RNDIS control message: %" PRIu32 "\n",
               cmd_hdr->msgtype);
+    }
+
+  if (status_changed)
+    {
+      if (linkup)
+        rndis_set_status_flag(RNDIS_NETWORK_LINK_UP);
+      if (linkdown)
+        rndis_set_status_flag(RNDIS_NETWORK_LINK_DOWN);
     }
 
   return OK;

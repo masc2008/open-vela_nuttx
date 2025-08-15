@@ -40,6 +40,10 @@ config MTD_PARTITION
 		managing the sub-region of flash beginning at 'offset' (in blocks)
 		and of size 'nblocks' on the device specified by 'mtd'.
 
+config DHARA_NSECTORS_RATIO
+	int "Set dhara nsectors ratio 1 ~ 100"
+	default 60
+
 config FTL_WRITEBUFFER
 	bool "Enable write buffering in the FTL layer"
 	default n

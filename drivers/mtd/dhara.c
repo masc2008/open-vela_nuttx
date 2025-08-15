@@ -445,7 +445,8 @@ static int dhara_geometry(FAR struct inode *inode,
       geometry->geo_available    = true;
       geometry->geo_mediachanged = false;
       geometry->geo_writeenabled = true;
-      geometry->geo_nsectors     = dev->geo.neraseblocks * dev->blkper;
+      geometry->geo_nsectors     = (blkcnt_t)dev->geo.neraseblocks * dev->blkper / 100 * CONFIG_DHARA_NSECTORS_RATIO;
+      geometry->geo_nsectors     = geometry->geo_nsectors / dev->blkper  * dev->blkper;
       geometry->geo_sectorsize   = dev->geo.blocksize;
 
       strcpy(geometry->geo_model, dev->geo.model);

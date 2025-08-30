@@ -54,7 +54,7 @@
  *
  ****************************************************************************/
 
-static bool syslog_safe_to_block(void)
+bool syslog_safe_to_block(void)
 {
 #ifndef CONFIG_DISABLE_SIGNALS
   FAR const struct tcb_s *rtcb;

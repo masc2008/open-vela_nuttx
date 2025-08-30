@@ -233,6 +233,7 @@ ssize_t syslog_write_foreach(FAR const char *buffer,
 void syslog_panic_notifier_register(void);
 #endif
 
+bool syslog_safe_to_block(void);
 #endif /* CONFIG_SYSLOG */
 
 #undef EXTERN

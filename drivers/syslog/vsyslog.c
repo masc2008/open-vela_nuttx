@@ -65,6 +65,10 @@ static FAR const char * const g_priority_str[] =
   };
 #endif
 
+#if !defined(CONFIG_SYSLOG_BUFSIZE) || (CONFIG_SYSLOG_BUFSIZE < 256)
+static mutex_t g_syslog_lock = NXMUTEX_INITIALIZER;
+#endif
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -154,6 +158,12 @@ int nx_vsyslog(int priority, FAR const IPTR char *fmt, FAR va_list *ap)
   strftime(date_buf, CONFIG_SYSLOG_TIMESTAMP_BUFFER,
            CONFIG_SYSLOG_TIMESTAMP_FORMAT, &tm);
 #  endif
+#endif
+
+#if !defined(CONFIG_SYSLOG_BUFSIZE) || (CONFIG_SYSLOG_BUFSIZE < 256)
+  if (syslog_safe_to_block()) {
+      nxmutex_lock(&g_syslog_lock);
+  }
 #endif
 
 #if defined(CONFIG_SYSLOG_COLOR_OUTPUT) || defined(CONFIG_SYSLOG_TIMESTAMP) || \
@@ -281,6 +291,12 @@ int nx_vsyslog(int priority, FAR const IPTR char *fmt, FAR va_list *ap)
   /* Flush and destroy the syslog stream buffer */
 
   lib_syslograwstream_close(&stream);
+
+#if !defined(CONFIG_SYSLOG_BUFSIZE) || (CONFIG_SYSLOG_BUFSIZE < 256)
+  if (syslog_safe_to_block()) {
+      nxmutex_unlock(&g_syslog_lock);
+  }
+#endif
   return ret;
 }
 

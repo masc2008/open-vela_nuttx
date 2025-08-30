@@ -79,6 +79,7 @@ static int syslog_default_putc(FAR syslog_channel_t *channel,
                                int ch);
 static ssize_t syslog_default_write(FAR syslog_channel_t *channel,
                                     FAR const char *buffer, size_t buflen);
+static int syslog_default_flush(FAR syslog_channel_t *channel);
 #endif
 
 #ifdef CONFIG_SYSLOG_DEFAULT_PANIC_ONLY
@@ -215,7 +216,7 @@ static const struct syslog_channel_ops_s g_default_channel_ops =
 {
   syslog_default_putc,
   syslog_default_putc,
-  NULL,
+  syslog_default_flush,
   syslog_default_write
 };
 
@@ -361,6 +362,17 @@ static ssize_t syslog_default_write(FAR syslog_channel_t *channel,
 
   UNUSED(channel);
   return buflen;
+}
+
+static int syslog_default_flush(FAR syslog_channel_t *channel)
+{
+#  ifdef CONFIG_ARCH_LOWPUTC
+  void up_flush(void);
+  up_flush();
+#  endif
+
+  UNUSED(channel);
+  return 0;
 }
 #endif
 

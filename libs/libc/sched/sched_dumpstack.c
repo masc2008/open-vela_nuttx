@@ -94,6 +94,7 @@ void sched_dumpstack(pid_t tid)
       for (i = 0; i < size; i++)
         {
           _alert("[%2d] [<%p>] %pS\n", tid, address[i], address[i]);
+          syslog_flush();
         }
 #endif
     }

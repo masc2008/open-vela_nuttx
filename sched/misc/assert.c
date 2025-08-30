@@ -168,6 +168,7 @@ static void stack_dump(uintptr_t sp, uintptr_t stack_top)
              stack, DUMP_PTR(ptr, 0), DUMP_PTR(ptr, 1),
              DUMP_PTR(ptr, 2), DUMP_PTR(ptr, 3), DUMP_PTR(ptr, 4),
              DUMP_PTR(ptr, 5), DUMP_PTR(ptr, 6), DUMP_PTR(ptr, 7));
+      syslog_flush();
     }
 }
 
@@ -442,6 +443,7 @@ static void dump_task(FAR struct tcb_s *tcb, FAR void *arg)
          , get_task_name(tcb)
          , args
         );
+  syslog_flush();
 }
 #endif
 

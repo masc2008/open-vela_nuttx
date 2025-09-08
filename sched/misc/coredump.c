@@ -1104,6 +1104,9 @@ int coredump(FAR const struct memory_region_s *regions,
   int memsegs = 0;
   int stksegs;
 
+  if (regions == NULL)
+    regions = g_regions;
+
   cinfo.regions = regions;
   cinfo.stream  = stream;
   cinfo.pid     = pid;

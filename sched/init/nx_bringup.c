@@ -323,6 +323,10 @@ static inline void nx_start_application(void)
   nx_romfsetc();
 #endif
 
+#ifndef CONFIG_BOARD_CRASHDUMP_NONE
+  coredump_initialize();
+#endif
+
 #ifdef CONFIG_BOARD_LATE_INITIALIZE
   /* Perform any last-minute, board-specific initialization, if so
    * configured.
@@ -331,10 +335,6 @@ static inline void nx_start_application(void)
   boards_trace_begin();
   board_late_initialize();
   boards_trace_end();
-#endif
-
-#ifndef CONFIG_BOARD_CRASHDUMP_NONE
-  coredump_initialize();
 #endif
 
   posix_spawnattr_init(&attr);

@@ -2866,6 +2866,7 @@ static bool cdcuart_rxflowcontrol(FAR struct uart_dev_s *dev,
 
 static void cdcuart_txint(FAR struct uart_dev_s *dev, bool enable)
 {
+  uint32_t retry = 100;
   FAR struct cdcacm_dev_s *priv;
 
   usbtrace(CDCACM_CLASSAPI_TXINT, (uint16_t)enable);
@@ -2895,7 +2896,10 @@ static void cdcuart_txint(FAR struct uart_dev_s *dev, bool enable)
     {
       cdcacm_sndpacket(priv);
     }
-  while (!priv->wrcontainer)
+
+  /* wait for wrcontainer valid
+   */
+  while (retry-- && !priv->wrcontainer)
     {
       if (up_interrupt_context() || sched_idletask())
         {

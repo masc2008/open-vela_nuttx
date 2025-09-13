@@ -130,6 +130,43 @@ def parse_args():
     )
     args = parser.parse_args()
 
+def extract_coredump_section(input_file, output_file=None):
+    if output_file is None:
+        base_name = os.path.splitext(input_file)[0]
+        output_file = f"{base_name}"
+
+    start_marker = "coredump_dump_syslog: Start coredump:"
+    end_marker = "coredump_dump_syslog: Finish coredump"
+
+    try:
+        with open(input_file, 'r') as infile, open(output_file, 'w') as outfile:
+            inside_coredump = False
+            coredump_lines = []
+
+            for line in infile:
+                if start_marker in line:
+                    inside_coredump = True
+                    continue
+
+                if end_marker in line:
+                    inside_coredump = False
+                    break
+
+                if inside_coredump:
+                    stripped_line = line.strip()
+                    if stripped_line:
+                        coredump_lines.append(line)
+
+            if coredump_lines:
+                outfile.writelines(coredump_lines)
+                print(f"Coredump section successfully extracted to {output_file}")
+                return output_file
+            else:
+                print("No coredump section found in the input file", file=sys.stderr)
+                return False
+    except IOError as e:
+        print(f"Error accessing files: {e}", file=sys.stderr)
+        return None
 
 def main():
     parse_args()

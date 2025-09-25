@@ -1112,6 +1112,10 @@ config SCHED_CRITMONITOR_MAXTIME_PANIC
 		If this option is enabled, a panic will be triggered when
 		IRQ/WQUEUE/PREEMPTION execution time exceeds SCHED_CRITMONITOR_MAXTIME_xxx
 
+config SCHED_CPULOAD
+	bool
+	default n
+
 choice
 	prompt "Select CPU load clock source"
 	default SCHED_CPULOAD_NONE
@@ -1138,6 +1142,7 @@ config SCHED_CPULOAD_NONE
 
 config SCHED_CPULOAD_SYSCLK
 	bool "Use system clock"
+	select SCHED_CPULOAD
 	---help---
 		If this option is enabled, the system clock is used for cpu load
 		measurement by default.
@@ -1157,6 +1162,7 @@ config SCHED_CPULOAD_SYSCLK
 
 config SCHED_CPULOAD_EXTCLK
 	bool "Use external clock"
+	select SCHED_CPULOAD
 	---help---
 		There is a serious issue for the accuracy of measurements if the
 		system clock is used, however.  NuttX threads are often started at
@@ -1179,6 +1185,7 @@ config SCHED_CPULOAD_EXTCLK
 config SCHED_CPULOAD_CRITMONITOR
 	bool "Use critical monitor"
 	depends on SCHED_CRITMONITOR_MAXTIME_THREAD >= 0
+	select SCHED_CPULOAD
 	---help---
 		Use the perfcounter in the core of the chip as a counter, no need to
 		use an external timer. Need to depend on SCHED_CRITMONITOR.

@@ -926,6 +926,11 @@ int coredump_add_memory_region(FAR const void *ptr, size_t size,
       return ret;
     }
 
+#ifdef CONFIG_BOARD_MEMORY_RANGE
+  if (g_regions == NULL)
+    g_regions = g_memory_region;
+#endif
+
   if (g_regions != NULL)
     {
       region = (FAR struct memory_region_s *)g_regions;

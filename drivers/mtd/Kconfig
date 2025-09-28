@@ -44,6 +44,10 @@ config DHARA_NSECTORS_RATIO
 	int "Set dhara nsectors ratio 1 ~ 100"
 	default 60
 
+config RESERVED_BLOCKS_TO_DHARA
+       int "reserved erase block num for nand"
+       default 0
+
 config FTL_WRITEBUFFER
 	bool "Enable write buffering in the FTL layer"
 	default n

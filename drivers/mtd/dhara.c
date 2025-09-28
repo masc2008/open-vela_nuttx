@@ -727,6 +727,8 @@ int dhara_initialize_by_path(FAR const char *path,
       goto err;
     }
 
+  dev->geo.neraseblocks -= CONFIG_RESERVED_BLOCKS_TO_DHARA;
+
   /* Get the number of R/W blocks per erase block */
 
   dev->blkper = dev->geo.erasesize / dev->geo.blocksize;

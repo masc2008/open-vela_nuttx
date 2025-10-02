@@ -46,7 +46,7 @@ endif
 
 ifeq ($(CONFIG_RNDIS),y)
   ifeq ($(CONFIG_BES_RNDIS),y)
-    CSRCS += bes_rndis.c bes_rndis_dhcpd.c
+    CSRCS += bes_rndis.c bes_rndis_dhcpd.c rndis_router.c
   else
     CSRCS += rndis.c
   endif

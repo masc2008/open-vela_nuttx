@@ -1166,6 +1166,11 @@ static int rndis_transmit(FAR struct rndis_dev_s *priv)
 
 static int rndis_ifup(FAR struct net_driver_s *dev)
 {
+  if (dev && !IFF_IS_RUNNING(dev->d_flags))
+    {
+      dev->d_flags |= IFF_RUNNING;
+    }
+
   return OK;
 }
 
@@ -2915,6 +2920,7 @@ static int usbclass_classobject(int minor,
 
   sq_init(&priv->reqlist);
   memcpy(priv->host_mac_address, g_rndis_default_mac_addr, 6);
+  memcpy(priv->netdev.d_mac.ether.ether_addr_octet, g_rndis_dev_mac_addr, 6);
   priv->netdev.d_private = priv;
   priv->netdev.d_ifup = &rndis_ifup;
   priv->netdev.d_ifdown = &rndis_ifdown;

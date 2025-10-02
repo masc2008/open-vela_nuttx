@@ -1170,6 +1170,15 @@ config RNDIS_NWRREQS
 	---help---
 		The number of write/read requests that can be in flight
 
+config RNDIS_ROUTER
+	bool "RNDIS router support"
+	default n
+	depends on NET_NAT
+	depends on ROUTE_IPv4_CACHEROUTE
+	depends on ROUTE_IPv6_CACHEROUTE
+	---help---
+		Configure the RNDIS router mode, and use bridge mode if config n
+
 config RNDIS_COMPOSITE
 	bool "RNDIS composite support"
 	default n

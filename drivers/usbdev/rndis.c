@@ -3905,6 +3905,7 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev)
 
 #if defined(CONFIG_BES_MODEM)
   RIL_RegisterInterfaceStateUpdate(rndis_notify_netdev_conn_stat);
+  rndis_conn_stat_cur = false;
 
   if (g_media_netdev)
     rndis_conn_stat_expect = RIL_InterfaceGetState(g_media_netdev->d_ifname);

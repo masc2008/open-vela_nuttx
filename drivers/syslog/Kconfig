@@ -331,6 +331,12 @@ config SYSLOG_DEFAULT
 		syslog() interfaces will be present, but all output will go to the
 		up_putc(ARCH_LOWPUTC == y) or bit-bucket(ARCH_LOWPUTC == n).
 
+config SYSLOG_DEFAULT_FLUSH
+	bool "Default SYSLOG flush"
+	default n
+	---help---
+		syslog() auto flush for txdma mode.
+
 endif
 
 if RAMLOG_SYSLOG

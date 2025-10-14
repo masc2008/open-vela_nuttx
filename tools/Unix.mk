@@ -555,22 +555,22 @@ $(BIN): pass1 pass2
 	$(Q) echo $(BIN) > nuttx.manifest
 	$(Q) printf "%s\n" *.map >> nuttx.manifest
 ifeq ($(CONFIG_INTELHEX_BINARY),y)
-	@echo "CP: nuttx.hex"
+	$(Q) echo "CP: nuttx.hex"
 	$(Q) $(OBJCOPY) $(OBJCOPYARGS) -O ihex $(BIN) nuttx.hex
 	$(Q) echo nuttx.hex >> nuttx.manifest
 endif
 ifeq ($(CONFIG_MOTOROLA_SREC),y)
-	@echo "CP: nuttx.srec"
+	$(Q) echo "CP: nuttx.srec"
 	$(Q) $(OBJCOPY) $(OBJCOPYARGS) -O srec $(BIN) nuttx.srec
 	$(Q) echo nuttx.srec >> nuttx.manifest
 endif
 ifeq ($(CONFIG_RAW_BINARY),y)
-	@echo "CP: nuttx.bin"
+	$(Q) echo "CP: nuttx.bin"
 	$(Q) $(OBJCOPY) $(OBJCOPYARGS) -O binary $(BIN) nuttx.bin
 	$(Q) echo nuttx.bin >> nuttx.manifest
 endif
 ifeq ($(CONFIG_UBOOT_UIMAGE),y)
-	@echo "MKIMAGE: uImage"
+	$(Q) echo "MKIMAGE: uImage"
 	$(Q) mkimage -A $(CONFIG_ARCH) -O linux -C none -T kernel -a $(CONFIG_UIMAGE_LOAD_ADDRESS) \
 		-e $(CONFIG_UIMAGE_ENTRY_POINT) -n $(BIN) -d nuttx.bin uImage
 	$(Q) if [ -w /tftpboot ] ; then \
@@ -579,7 +579,7 @@ ifeq ($(CONFIG_UBOOT_UIMAGE),y)
 	$(Q) echo "uImage" >> nuttx.manifest
 endif
 ifeq ($(CONFIG_RAW_DISASSEMBLY),y)
-	@echo "CP: nuttx.asm"
+	$(Q) echo "CP: nuttx.asm"
 	$(Q) $(OBJDUMP) -d $(BIN) > nuttx.asm
 	$(Q) echo nuttx.bin >> nuttx.asm
 endif

@@ -63,6 +63,10 @@
 #  include <nuttx/usb/composite.h>
 #endif
 
+extern void bes_lte_data_send(uint8_t *d_buf, uint16_t d_len);
+extern int osDelay(uint32_t millisec);
+extern uint32_t hal_sys_timer_get(void);
+
 /****************************************************************************
  * Pre-processor definitions
  ****************************************************************************/
@@ -803,7 +807,7 @@ static FAR bool rndis_allocnetpkts(FAR struct rndis_dev_s *priv)
     return true;
   }
 
-  priv->net_packet = (FAR struct rndis_req_s *)sq_remfirst(&rndis_free_netpkt_lst);
+  priv->net_packet = (FAR struct rndis_netpkt_s *)sq_remfirst(&rndis_free_netpkt_lst);
   leave_critical_section(flags);
   return priv->net_packet != NULL;
 }
@@ -830,15 +834,16 @@ static void rndis_addpendingnetpkts(FAR struct rndis_dev_s *priv)
   leave_critical_section(flags);
 }
 
-static FAR struct rndis_req_s *rndis_remfirstpendingnetpkts(FAR struct rndis_dev_s *priv)
+static FAR struct rndis_netpkt_s *rndis_remfirstpendingnetpkts(FAR struct rndis_dev_s *priv)
 {
   FAR struct rndis_netpkt_s *netpkt = NULL;
   irqstate_t flags = enter_critical_section();
-  netpkt = (FAR struct rndis_req_s *)sq_remfirst(&rndis_pending_netpkt_lst);
+  netpkt = (FAR struct rndis_netpkt_s *)sq_remfirst(&rndis_pending_netpkt_lst);
   leave_critical_section(flags);
   return netpkt;
 }
 
+__attribute__((unused))
 static bool rndis_haspendingnetpkts(FAR struct rndis_dev_s *priv)
 {
   return sq_count(&rndis_pending_netpkt_lst) > 1;
@@ -1046,6 +1051,7 @@ static void rndis_freenetreq(FAR struct rndis_dev_s *priv)
  *
  ****************************************************************************/
 
+__attribute__((unused))
 static void rndis_iob2buf(FAR struct rndis_dev_s *priv,
                           FAR struct rndis_req_s *req)
 {
@@ -1094,6 +1100,7 @@ static void rndis_iob2buf(FAR struct rndis_dev_s *priv,
  *
  ****************************************************************************/
 
+__attribute__((unused))
 static bool rndis_allocrxreq(FAR struct rndis_dev_s *priv)
 {
   // FAR struct iob_s *iob;
@@ -1139,6 +1146,7 @@ static bool rndis_allocrxreq(FAR struct rndis_dev_s *priv)
  *
  ****************************************************************************/
 
+__attribute__((unused))
 static void rndis_giverxreq(FAR struct rndis_dev_s *priv)
 {
   DEBUGASSERT(priv->rx_req != NULL);
@@ -1208,7 +1216,7 @@ static uint16_t rndis_fillrequest(FAR struct rndis_dev_s *priv,
 
 void net_dump_hex(unsigned char *buf, int len)
 {
-  uint32_t i,j;
+  uint32_t i, j = 0;
   unsigned char tmp[4*16];
   int buf_len = 4*16;
   for (i = 0;i < len; i++)
@@ -1290,7 +1298,6 @@ static void rndis_handle_arp(FAR struct rndis_dev_s *priv, FAR struct rndis_netp
   size_t datalen = 0;
   FAR struct eth_hdr_s *req_eth_hdr   = NULL;
   FAR struct arp_hdr_s *req_arp_hdr   = NULL;
-  FAR uint8_t *reply_buff = NULL;
   FAR struct eth_hdr_s *reply_eth_hdr = NULL;
   FAR struct arp_hdr_s *reply_arp_hdr = NULL;
   in_addr_t ipaddr;
@@ -1320,7 +1327,7 @@ static void rndis_handle_arp(FAR struct rndis_dev_s *priv, FAR struct rndis_netp
 
   if (!net_ipv4addr_cmp(ipaddr, g_media_netdev->d_draddr))
   {
-    uinfo("rndis_debug %d, ipaddr=0x%08x, d_draddr==0x%08x\n", __LINE__, ipaddr, g_media_netdev->d_draddr);
+    uinfo("rndis_debug %d, ipaddr=0x%08lx, d_draddr==0x%08lx\n", __LINE__, ipaddr, g_media_netdev->d_draddr);
     return;
   }
 
@@ -1399,7 +1406,6 @@ static int rndis_rxdispatch_task_run(int argc, char **argv)
   FAR struct rndis_dev_s    *priv   = NULL;
   FAR struct rndis_netpkt_s *netpkt = NULL;
   FAR struct eth_hdr_s      *hdr    = NULL;
-  irqstate_t flags;
 
   do
   {
@@ -1484,6 +1490,8 @@ static int rndis_rxdispatch_task_run(int argc, char **argv)
     rndis_submit_rdreq(priv);
     net_unlock();
   } while (1);
+
+  return 0;
 }
 
 void rndis_set_wifi_host_mac_addr(FAR const uint8_t *mac_address)
@@ -1560,7 +1568,7 @@ void rndis_receive_eth_data(uint8_t *data, uint16_t len, bool has_eth_hdr)
     return;
   }
 
-  uinfo("enter rx data len=%d, time: %d ticks, epbulkin", len, (hal_sys_timer_get()));
+  uinfo("enter rx data len=%d, time: %ld ticks, epbulkin", len, (hal_sys_timer_get()));
   // net_dump_hex(data,len);
 
   if (!rndis_allocnetreq(priv))
@@ -1619,7 +1627,7 @@ void rndis_receive_eth_data(uint8_t *data, uint16_t len, bool has_eth_hdr)
   priv->net_req = NULL;
   leave_critical_section(flags);
 
-  uinfo("exit, time: %d ticks, epbulkin", (hal_sys_timer_get()));
+  uinfo("exit, time: %ld ticks, epbulkin", (hal_sys_timer_get()));
 }
 
 void rndis_receive_eth_data_with_hdr(uint8_t *data, uint16_t len, bool has_eth_hdr)
@@ -1646,7 +1654,7 @@ void rndis_receive_eth_data_with_hdr(uint8_t *data, uint16_t len, bool has_eth_h
     return;
   }
 
-  uinfo("enter rx data len=%d, time: %d ticks, epbulkin", len, (hal_sys_timer_get()));
+  uinfo("enter rx data len=%d, time: %ld ticks, epbulkin", len, (hal_sys_timer_get()));
   // net_dump_hex(data,len);
 
   if (!rndis_allocdummyreq(priv))
@@ -1705,7 +1713,7 @@ void rndis_receive_eth_data_with_hdr(uint8_t *data, uint16_t len, bool has_eth_h
   priv->dummy_req = NULL;
   leave_critical_section(flags);
 
-  uinfo("exit, time: %d ticks, epbulkin", (hal_sys_timer_get()));
+  uinfo("exit, time: %ld ticks, epbulkin", (hal_sys_timer_get()));
 }
 
 /****************************************************************************
@@ -1822,6 +1830,7 @@ static void rndis_txavail_work(FAR void *arg)
  *
  ****************************************************************************/
 
+__attribute__((unused))
 static int rndis_txavail(FAR struct net_driver_s *dev)
 {
   FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)dev->d_private;
@@ -2355,7 +2364,7 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
         {
           FAR struct rndis_response_header *resp;
           size_t respsize = sizeof(struct rndis_indicate_msg);
-          uinfo("RNDIS keepalive priv->status:%d", priv->status);
+          uinfo("RNDIS keepalive priv->status:%lu", priv->status);
 
           if (((true == rndis_conn_stat_cur) && (false == rndis_conn_stat_expect))
               || rndis_check_status_flag(RNDIS_NETWORK_LINK_DOWN))

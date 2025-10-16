@@ -44,6 +44,7 @@
 #include <netinet/in.h>
 // #include <netinet/udp.h>
 #include <arpa/inet.h>
+#include <nuttx/net/dns.h>
 
 // #include "netutils/netlib.h"
 
@@ -584,7 +585,7 @@ uint16_t rndis_dhcpd_dhcp(FAR struct net_driver_s *netdev, uint8_t *input_buf, u
   {
     int ret = 0;
     ret = dns_foreach_nameserver(rndis_obtain_dns, &g_dnsip);
-    uinfo("rndis_obtain_dns result=%d, g_dnsip=%08x", ret, g_dnsip);
+    uinfo("rndis_obtain_dns result=%d, g_dnsip=%08lx", ret, g_dnsip);
   }
 
   switch (g_ds_data.ds_optmsgtype)
@@ -607,13 +608,11 @@ uint16_t rndis_dhcpd_dhcp(FAR struct net_driver_s *netdev, uint8_t *input_buf, u
   return len;
 }
 
-#define UDP_HDRLEN (8)
 uint16_t rndis_dhcpd_udp(FAR struct net_driver_s *netdev, uint8_t *input_buf, uint16_t input_len, uint8_t *output_buf, uint16_t output_len)
 {
   FAR struct udp_hdr_s  *input_udp_hdr   = NULL;
   FAR struct udp_hdr_s  *output_udp_hdr  = NULL;
   uint16_t len = 0;
-  uint16_t chksum = 0;
 
   uinfo("enter\n");
 
@@ -676,7 +675,7 @@ uint16_t rndis_dhcpd_ipv4(FAR struct net_driver_s *netdev, uint8_t *input_buf, u
 
   len += IPv4_HDRLEN;
 
-  output_ipv4_hdr               = (FAR struct output_buf *)output_buf;
+  output_ipv4_hdr               = (FAR struct ipv4_hdr_s *)output_buf;
   output_ipv4_hdr->vhl          = input_ipv4_hdr->vhl;
   output_ipv4_hdr->tos          = input_ipv4_hdr->tos;
   output_ipv4_hdr->len[0]       = (len >> 8);

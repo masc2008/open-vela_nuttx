@@ -293,6 +293,18 @@ config USBHOST_CDCACM_TXBUFSIZE
 
 endif # USBHOST_CDCACM
 
+config USBHOST_CDCECM
+	bool "CDC/ECM support"
+	default n
+	depends on USBHOST_HAVE_ASYNCH && !USBHOST_BULK_DISABLE && !USBHOST_INT_DISABLE
+	select USBHOST_ASYNCH
+	select NETDEVICES
+	select NET
+	select NET_ETHERNET
+	---help---
+		Select this option to build in host support for CDC/ECM network
+		devices.
+
 config USBHOST_CDCMBIM
 	bool "CDC/MBIM support"
 	default n

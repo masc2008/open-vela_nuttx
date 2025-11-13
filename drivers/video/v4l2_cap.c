@@ -662,6 +662,9 @@ static void convert_to_imgdatafmt(FAR video_format_t *video,
 
       case V4L2_PIX_FMT_ENTROPY:
         data->pixelformat = IMGDATA_PIX_FMT_ENTROPY;
+
+      case V4L2_PIX_FMT_H264:
+         data->pixelformat = IMGDATA_PIX_FMT_H264;
         break;
 
       default: /* V4L2_PIX_FMT_JPEG_WITH_SUBIMG */
@@ -705,6 +708,9 @@ static void convert_to_imgsensorfmt(FAR video_format_t *video,
 
       case V4L2_PIX_FMT_ENTROPY:
         sensor->pixelformat = IMGSENSOR_PIX_FMT_ENTROPY;
+
+      case V4L2_PIX_FMT_H264:
+         sensor->pixelformat = IMGSENSOR_PIX_FMT_H264;
         break;
 
       default: /* V4L2_PIX_FMT_JPEG_WITH_SUBIMG */
@@ -2622,6 +2628,7 @@ static int capture_try_fmt(FAR struct file *filep,
       case V4L2_PIX_FMT_JPEG:
       case V4L2_PIX_FMT_ENTROPY:
       case V4L2_PIX_FMT_JPEG_WITH_SUBIMG:
+      case V4L2_PIX_FMT_H264:
         nr_fmt = 1;
         vf[CAPTURE_FMT_MAIN].width       = fmt->fmt.pix.width;
         vf[CAPTURE_FMT_MAIN].height      = fmt->fmt.pix.height;

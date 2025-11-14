@@ -905,6 +905,18 @@ config ARCH_CORTEXA7
 	select ARCH_HAVE_FPU
 	select ARM_HAVE_MPCORE
 
+config ARCH_CORTEX_A55
+	bool
+	default n
+	select ARCH_ARMV7A
+	select ARCH_DCACHE
+	select ARCH_ICACHE
+	select ARCH_HAVE_MMU
+	select ARCH_USE_MMU
+	select ARCH_HAVE_TESTSET
+	select ARCH_HAVE_FPU
+	select ARM_HAVE_MPCORE
+
 config ARCH_CORTEXA8
 	bool
 	default n

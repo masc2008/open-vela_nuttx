@@ -648,12 +648,20 @@
 #  define GIC_SMP_SCHED          GIC_IRQ_SGI3
 #endif
 
+#else
+#include "arm_gicv3.h"
+#define GIC_IRQ_STM              29 /* Secure Physical Timer (STM) PPI(1) */
+#define GIC_IRQ_PTM              30 /* Non-secure Physical Timer (PTM) PPI(2) */
+
+#endif /* CONFIG_ARMV7A_HAVE_GICv2 */
+
 /****************************************************************************
  * Inline Functions
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
 
+#ifdef CONFIG_ARMV7A_HAVE_GICv2
 /****************************************************************************
  * Name: arm_gic_nlines
  *
@@ -680,6 +688,7 @@ static inline unsigned int arm_gic_nlines(void)
   field  = (regval & GIC_ICDICTR_ITLINES_MASK) >> GIC_ICDICTR_ITLINES_SHIFT;
   return (field + 1) << 5;
 }
+#endif
 
 /****************************************************************************
  * Name: arm_cpu_sgi
@@ -873,5 +882,4 @@ int gic_v2m_initialize(void);
 #endif
 #endif /* __ASSEMBLY__ */
 
-#endif /* CONFIG_ARMV7A_HAVE_GICv2 */
 #endif /* __ARCH_ARM_SRC_ARMV7_A_GIC_H */

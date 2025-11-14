@@ -30,6 +30,9 @@ else ifeq ($(CONFIG_ARCH_CORTEXA8),y)
 else ifeq ($(CONFIG_ARCH_CORTEXA9),y)
   ARCHCPUFLAGS += -mcpu=cortex-a9
   LLVM_CPUTYPE := cortex-a9
+else ifeq ($(CONFIG_ARCH_CORTEX_A55),y)
+  ARCHCPUFLAGS += -mcpu=cortex-a55
+  LLVM_CPUTYPE := cortex-a55
 endif
 
 ifeq ($(CONFIG_ARM_THUMB),y)
@@ -83,6 +86,8 @@ ifeq ($(CONFIG_ARM_TOOLCHAIN_ARMCLANG),y)
     LDCPUFLAGS = Cortex-A8
   else ifeq ($(CONFIG_ARCH_CORTEXA9),y)
     LDCPUFLAGS = Cortex-A9
+  else ifeq ($(CONFIG_ARCH_CORTEX_A55),y)
+    LDCPUFLAGS = Cortex-A55
   endif
 
   ifeq ($(CONFIG_ARCH_FPU),)

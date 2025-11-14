@@ -181,7 +181,7 @@ __start:
 	/* Get cpuindex, cpu0 continue boot, others wait event from cpu0 */
 
 	mrc		CP15_MPIDR(r0)
-	and		r0, r0, #0x3
+	ubfx		r0, r0, #MPIDR_CPUID_SHIFT, #2
 	cmp		r0, #0
 	beq		__cpu0_start
 

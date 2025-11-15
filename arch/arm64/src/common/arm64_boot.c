@@ -148,6 +148,10 @@ void arm64_boot_el2_init(void)
   reg |= HCR_ATA_BIT;
 #endif
 
+#ifdef CONFIG_BES_ARM64_BOOT_EL1AARCH32
+  reg &= ~HCR_RW_BIT;
+#endif
+
   write_sysreg(reg, hcr_el2);
 
   reg = 0U;                   /* RES0 */
@@ -220,8 +224,12 @@ void arm64_boot_el1_init(void)
   UP_ISB();
 }
 
+#ifdef CONFIG_BES_ARM64_BOOT_EL1AARCH32
+void arm64_boot_primary_c_routine(void) {}
+#else
 void arm64_boot_primary_c_routine(void)
 {
   arm64_chip_boot();
   nx_start();
 }
+#endif

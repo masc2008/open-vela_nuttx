@@ -262,11 +262,16 @@ switch_el:
     bl    arm64_boot_el2_init
 
     /* Move to EL1 with all exceptions masked */
-
+#ifdef CONFIG_BES_ARM64_BOOT_EL1AARCH32
+    mov_imm    x0, ((0x7 << SPSR_DAIF_SHIFT) | SPSR_MODE_MASK | BIT(4))
+    msr   spsr_el2, x0
+    mov_imm x0, 0x80100000
+#else
     mov_imm    x0, (SPSR_DAIF_MASK | SPSR_MODE_EL1T)
     msr   spsr_el2, x0
 
     adr   x0, 1f
+#endif
     msr   elr_el2, x0
     eret
 

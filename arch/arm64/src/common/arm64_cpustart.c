@@ -224,7 +224,9 @@ int up_cpu_start(int cpu)
 }
 
 /* the C entry of secondary cores */
-
+#ifdef CONFIG_BES_ARM64_BOOT_EL1AARCH32
+void arm64_boot_secondary_c_routine(void) {}
+#else
 void arm64_boot_secondary_c_routine(void)
 {
 #ifdef CONFIG_PERCPU_SECTION
@@ -256,3 +258,4 @@ void arm64_boot_secondary_c_routine(void)
   arm64_smp_init_top();
 #endif
 }
+#endif

@@ -87,6 +87,9 @@
 
 #define PM_IDLE_DOMAIN 0
 
+#define PM_DUMP_DEPTH  6
+#define PM_SKIP_DEPTH  2
+
 /* CONFIG_IDLE_CUSTOM. Some architectures support this definition.  This,
  * if defined, will allow you replace the default IDLE loop with your
  * own, custom idle loop to support board-specific IDLE time power management
@@ -389,6 +392,7 @@ struct pm_wakelock_s
   struct dq_entry_s fsnode;
   struct timespec start;
   struct timespec elapse;
+  void *wakelock_cb[PM_DUMP_DEPTH];
 #endif
 };
 

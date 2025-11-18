@@ -415,11 +415,23 @@ static ssize_t pm_read_wakelock(FAR struct file *filep, FAR char *buffer,
         }
 
       linesize = snprintf(pmfile->line, PM_LINELEN, WAFMT,
-                          wakelock->name,
-                          g_pm_state[wakelock->state],
-                          wakelock->count,
-                          time);
+                            wakelock->name,
+                            g_pm_state[wakelock->state],
+                            wakelock->count,
+                            time);
 
+      if(wakelock->count != 0) {
+        linesize -= 2;
+        int ret = 0;
+        for (size_t i = 0; i < PM_DUMP_DEPTH - PM_SKIP_DEPTH; i++)
+        {
+          ret += snprintf(pmfile->line + linesize + ret, PM_LINELEN - linesize - ret, " %p",(uint32_t)wakelock->wakelock_cb[i] | 1);
+          if ((PM_LINELEN - linesize - ret) < 13)
+            break;
+        }
+        ret += snprintf(pmfile->line + linesize + ret, PM_LINELEN - linesize - ret, "\n");
+        linesize += ret;
+      }
       copysize = procfs_memcpy(pmfile->line, linesize, buffer,
                                buflen, &offset);
 

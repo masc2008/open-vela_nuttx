@@ -348,7 +348,13 @@ void pm_wakelock_stay(FAR struct pm_wakelock_s *wakelock)
   DEBUGASSERT(wakelock);
 
   /* Get a convenience pointer to minimize all of the indexing */
-
+#ifdef CONFIG_PM_PROCFS
+  extern int sched_backtrace(pid_t tid, FAR void **buffer, int size, int skip);
+  if (wakelock->wakelock_cb[0] == 0)
+  {
+    sched_backtrace(gettid(), wakelock->wakelock_cb,PM_DUMP_DEPTH,PM_SKIP_DEPTH);
+  }
+#endif
   domain = wakelock->domain;
   pdom   = &g_pmdomains[domain];
   dq     = &pdom->wakelock[wakelock->state];
@@ -395,7 +401,10 @@ void pm_wakelock_relax(FAR struct pm_wakelock_s *wakelock)
   DEBUGASSERT(wakelock);
 
   /* Get a convenience pointer to minimize all of the indexing */
-
+#ifdef CONFIG_PM_PROCFS
+  if(wakelock->wakelock_cb[0] != 0)
+    memset(wakelock->wakelock_cb, PM_DUMP_DEPTH, 0);
+#endif
   domain = wakelock->domain;
   pdom   = &g_pmdomains[domain];
   dq     = &pdom->wakelock[wakelock->state];
@@ -446,7 +455,11 @@ void pm_wakelock_staytimeout(FAR struct pm_wakelock_s *wakelock, int ms)
   DEBUGASSERT(wakelock);
 
   /* Get a convenience pointer to minimize all of the indexing */
-
+#ifdef CONFIG_PM_PROCFS
+  extern int sched_backtrace(pid_t tid, FAR void **buffer, int size, int skip);
+  if(wakelock->wakelock_cb[0] == 0)
+    sched_backtrace(gettid(), wakelock->wakelock_cb, PM_DUMP_DEPTH, PM_SKIP_DEPTH);
+#endif
   domain = wakelock->domain;
   pdom   = &g_pmdomains[domain];
   dq     = &pdom->wakelock[wakelock->state];

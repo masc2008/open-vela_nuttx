@@ -1987,7 +1987,7 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
           // return -EBUSY;
         }
     }
- 
+
   return OK;
 }
 
@@ -3725,6 +3725,7 @@ static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
   FAR struct rndis_driver_s *drvr = (FAR struct rndis_driver_s *)classdev;
   FAR struct rndis_alloc_s *alloc = (FAR struct rndis_alloc_s *)drvr->dev;
 
+  g_rndis_netdev = NULL;
 //   netdev_unregister(&drvr->dev->netdev);
   nxmutex_destroy(&drvr->dev->lock);
   kmm_free(alloc);

@@ -953,6 +953,14 @@ static int rptun_dev_stop(FAR struct remoteproc *rproc)
 
       rptun_remove_devices(priv);
       RPTUN_UNREGISTER_CALLBACK(priv->dev);
+#ifdef CONFIG_RPTUN_PM
+#ifndef CONFIG_RPTUN_PM_AUTORELAX
+      /* Relax pm lock if it's locked in rpmsg_device_destory */
+      if (pm_wakelock_staycount(&priv->wakelock)) {
+        pm_wakelock_relax(&priv->wakelock);
+      }
+#endif
+#endif
       remoteproc_shutdown(rproc);
     }
 

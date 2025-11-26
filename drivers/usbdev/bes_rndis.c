@@ -62,7 +62,7 @@
 #  include <nuttx/usb/composite.h>
 #endif
 
-#include "rndis_router.h"
+#include "bes_rndis_router.h"
 
 /****************************************************************************
  * Pre-processor definitions
@@ -553,6 +553,8 @@ static const struct rndis_oid_value_s g_rndis_oid_values[] =
  * Private Data
  ****************************************************************************/
 
+static struct net_driver_s *g_rndis_netdev = NULL;
+
 /****************************************************************************
  * Buffering of data is implemented in the following manner:
  *
@@ -783,6 +785,8 @@ static bool rndis_allocnetreq(FAR struct rndis_dev_s *priv)
     }
 
   priv->net_req = rndis_allocwrreq(priv);
+  if (priv->net_req)
+    priv->net_req->iob = NULL;
 
   leave_critical_section(flags);
   return priv->net_req != NULL;
@@ -929,7 +933,6 @@ static bool rndis_allocrxreq(FAR struct rndis_dev_s *priv)
     }
 
   priv->rx_req->iob = iob;
-  rndis_iob2buf(priv, priv->rx_req);
 
   return true;
 }
@@ -1032,16 +1035,16 @@ static void rndis_rxdispatch(FAR void *arg)
   FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)arg;
   FAR struct eth_hdr_s *hdr;
   irqstate_t flags;
+  struct net_driver_s *dev = &priv->netdev;
 
   net_lock();
+
   flags = enter_critical_section();
   rndis_giverxreq(priv);
   priv->netdev.d_len = priv->current_rx_datagram_size;
   leave_critical_section(flags);
 
-  hdr = (FAR struct eth_hdr_s *)
-    &priv->netdev.d_iob->io_data[CONFIG_NET_LL_GUARDSIZE -
-                                 NET_LL_HDRLEN(&priv->netdev)];
+  hdr = (FAR struct eth_hdr_s *)NETLLBUF;
 
   /* We only accept IP packets of the configured type and ARP packets */
 
@@ -1096,7 +1099,7 @@ static void rndis_rxdispatch(FAR void *arg)
   else
 #endif
     {
-      uerr("ERROR: Unsupported packet type dropped (%02x)\n",
+      nerr("ERROR: Unsupported packet type dropped (%02x)\n",
            HTONS(hdr->type));
       NETDEV_RXDROPPED(&priv->netdev);
       priv->netdev.d_len = 0;
@@ -1313,7 +1316,7 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
             }
           else
             {
-              uerr("Unknown RNDIS message type %" PRIu32 "\n", msg->msgtype);
+              nerr("Unknown RNDIS message type %" PRIu32 "\n", msg->msgtype);
             }
         }
     }
@@ -1337,7 +1340,7 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
             }
           else
             {
-              uerr("The packet exceeds request buffer (reqlen=%d)\n",
+              nerr("The packet exceeds request buffer (reqlen=%d)\n",
                    reqlen);
             }
         }
@@ -1351,7 +1354,7 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
       if (priv->current_rx_datagram_size > (CONFIG_NET_ETH_PKTSIZE + 4) ||
           priv->current_rx_datagram_size <= (ETH_HDRLEN + 4))
         {
-          uerr("ERROR: Bad packet size dropped (%zu)\n",
+          nerr("ERROR: Bad packet size dropped (%zu)\n",
                priv->current_rx_datagram_size);
           NETDEV_RXERRORS(&priv->netdev);
           priv->current_rx_datagram_size = 0;
@@ -1403,7 +1406,7 @@ rndis_prepare_response(FAR struct rndis_dev_s *priv, size_t size,
 
   if (priv->response_queue_words + size_words > RNDIS_RESP_QUEUE_WORDS)
     {
-      uerr("RNDIS response queue full, dropping command %08x",
+      nerr("RNDIS response queue full, dropping command %08x",
            (unsigned int)request_hdr->msgtype);
       return NULL;
     }
@@ -1594,7 +1597,7 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
                 }
             }
 
-          uinfo("RNDIS Query RID=%08x OID=%08x LEN=%d DAT=%08x",
+          ninfo("RNDIS Query RID=%08x OID=%08x LEN=%d DAT=%08x",
                 (unsigned)req->hdr.reqid, (unsigned)req->objid,
                 (int)resp->buflen, (unsigned)resp->buffer[0]);
 
@@ -1625,7 +1628,7 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
               return -ENOMEM;
             }
 
-          uinfo("RNDIS SET RID=%08x OID=%08x LEN=%d DAT=%08x",
+          ninfo("RNDIS SET RID=%08x OID=%08x LEN=%d DAT=%08x",
                 (unsigned)req->hdr.reqid, (unsigned)req->objid,
                 (int)req->buflen, (unsigned)req->buffer[0]);
 
@@ -1639,17 +1642,17 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
                 }
               else
                 {
-                  uinfo("RNDIS is now connected");
+                  ninfo("RNDIS is now connected");
                   priv->connected = true;
                 }
             }
           else if (req->objid == RNDIS_OID_802_3_MULTICAST_LIST)
             {
-              uinfo("RNDIS multicast list ignored");
+              ninfo("RNDIS multicast list ignored");
             }
           else
             {
-              uinfo("RNDIS unsupported set %08x", (unsigned)req->objid);
+              ninfo("RNDIS unsupported set %08x", (unsigned)req->objid);
               resp->status = RNDIS_STATUS_NOT_SUPPORTED;
             }
 
@@ -1691,7 +1694,7 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
         break;
 
       default:
-        uwarn("Unsupported RNDIS control message: %" PRIu32 "\n",
+        nwarn("Unsupported RNDIS control message: %" PRIu32 "\n",
               cmd_hdr->msgtype);
     }
 
@@ -1738,7 +1741,6 @@ static void rndis_rdcomplete(FAR struct usbdev_ep_s *ep,
     {
     case 0: /* Normal completion */
       ret = rndis_recvpacket(priv, req->buf, req->xfrd);
-      DEBUGASSERT(ret != -ENOMEM);
       break;
 
     case -ESHUTDOWN: /* Disconnection */
@@ -1816,6 +1818,62 @@ static void rndis_wrcomplete(FAR struct usbdev_ep_s *ep,
     }
 
   leave_critical_section(flags);
+}
+
+static FAR void *
+rndis_prepare_indicate_status(FAR struct rndis_dev_s *priv, size_t size, uint32_t status)
+{
+  size_t size_words = size / sizeof(uint32_t);
+  uint32_t *buf = priv->response_queue + priv->response_queue_words;
+  struct rndis_indicate_msg *hdr = (struct rndis_indicate_msg *)buf;
+
+  if (priv->response_queue_words + size_words > RNDIS_RESP_QUEUE_WORDS)
+    {
+      nerr("RNDIS response queue full, dropping command %08x", status);
+      return NULL;
+    }
+
+  hdr->msgtype   = RNDIS_INDICATE_MSG;
+  hdr->msglen    = size;
+  hdr->status    = status;
+  hdr->buflen    = 0;
+  hdr->bufoffset = 0;
+
+  return hdr;
+}
+
+void rndis_ip_stream_enable(bool enable)
+{
+  struct rndis_dev_s *priv = NULL;
+  FAR struct rndis_response_header *resp;
+  size_t respsize = sizeof(struct rndis_indicate_msg);
+
+  syslog(LOG_INFO, "%s: enable:%d g_rndis_netdev:%p\n", __func__, enable, g_rndis_netdev);
+
+  if (g_rndis_netdev)
+    {
+      priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
+
+      if (enable)
+        {
+          usbclass_setconfig(priv, RNDIS_CONFIGID);
+          resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_CONNECT);
+          if (!resp)
+            return -ENOMEM;
+          rndis_send_encapsulated_response(priv, respsize);
+
+          netdev_carrier_on(g_rndis_netdev);
+        }
+      else
+        {
+          netdev_carrier_off(g_rndis_netdev);
+
+          resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_DISCONNECT);
+          if (!resp)
+            return -ENOMEM;
+          rndis_send_encapsulated_response(priv, respsize);
+        }
+    }
 }
 
 /****************************************************************************
@@ -2493,7 +2551,7 @@ static int usbclass_setup(FAR struct usbdevclass_driver_s *driver,
   value = GETUINT16(ctrl->value);
   len   = GETUINT16(ctrl->len);
 
-  uinfo("type=%02x req=%02x value=%04x len=%04x\n",
+  ninfo("type=%02x req=%02x value=%04x len=%04x\n",
         ctrl->type, ctrl->req, value, len);
 
   switch (ctrl->type & USB_REQ_TYPE_MASK)
@@ -2932,6 +2990,7 @@ static int usbclass_classobject(int minor,
   priv->netdev.d_ifup = &rndis_ifup;
   priv->netdev.d_ifdown = &rndis_ifdown;
   priv->netdev.d_txavail = &rndis_txavail;
+  strcpy(priv->netdev.d_ifname, "rndis");
 
   /* MAC address filtering is purposefully left out of this driver. Since
    * in the RNDIS USB scenario there are only two devices in the network
@@ -2955,11 +3014,12 @@ static int usbclass_classobject(int minor,
   strlcpy(priv->netdev.d_ifname, "rndis", IFNAMSIZ);
   ret = netdev_register(&priv->netdev, NET_LL_ETHERNET);
   if (ret)
-    {
-      uerr("Failed to register net device");
-    }
+  {
+    nerr("Failed to register net device");
+  }
   else
   {
+    g_rndis_netdev = &priv->netdev;
     rndis_router_setup(&priv->netdev);
   }
 
@@ -2970,6 +3030,8 @@ static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
 {
   FAR struct rndis_driver_s *drvr = (FAR struct rndis_driver_s *)classdev;
   FAR struct rndis_alloc_s *alloc = (FAR struct rndis_alloc_s *)drvr->dev;
+
+  g_rndis_netdev = NULL;
 
   rndis_router_teardown(&drvr->dev->netdev);
   netdev_unregister(&drvr->dev->netdev);

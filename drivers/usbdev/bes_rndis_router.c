@@ -1,5 +1,5 @@
 /****************************************************************************
- * drivers/usbdev/rndis_router.c
+ * drivers/usbdev/bes_rndis_router.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -44,11 +44,21 @@
 #define RNDIS_ROUTER_DHCPD_NETMASK      0xffffff00
 #define RNDIS_ROUTER_DHCPD_STARTIP      0xc0a82b02
 #define RNDIS_ROUTER_DHCPD_DNSIP        0x72727272
+#define RNDIS_ROUTER_IPV6_ADDR0         0xfc00
+#define RNDIS_ROUTER_IPV6_ADDR1         0x0000
+#define RNDIS_ROUTER_IPV6_ADDR2         0x0000
+#define RNDIS_ROUTER_IPV6_ADDR3         0x0000
+#define RNDIS_ROUTER_IPV6_ADDR4         0x0000
+#define RNDIS_ROUTER_IPV6_ADDR5         0x0000
+#define RNDIS_ROUTER_IPV6_ADDR6         0x0000
+#define RNDIS_ROUTER_IPV6_ADDR7         0x0001
+#define RNDIS_ROUTER_IPV6_PREFLEN       64
 
 void rndis_router_setup(struct net_driver_s *dev)
 {
   FAR const char *devname = dev->d_ifname;
   struct in_addr addr;
+  struct in6_addr in6_addr;
 
   /* Set up our host address */
   addr.s_addr = HTONL(RNDIS_ROUTER_DHCPD_ROUTERIP);
@@ -61,6 +71,19 @@ void rndis_router_setup(struct net_driver_s *dev)
   /* Setup the subnet mask */
   addr.s_addr = HTONL(RNDIS_ROUTER_DHCPD_NETMASK);
   netlib_set_ipv4netmask(devname, &addr);
+
+  netlib_obtain_ipv6addr(devname);
+
+  in6_addr.in6_u.u6_addr16[0] = HTONS(RNDIS_ROUTER_IPV6_ADDR0);
+  in6_addr.in6_u.u6_addr16[1] = HTONS(RNDIS_ROUTER_IPV6_ADDR1);
+  in6_addr.in6_u.u6_addr16[2] = HTONS(RNDIS_ROUTER_IPV6_ADDR2);
+  in6_addr.in6_u.u6_addr16[3] = HTONS(RNDIS_ROUTER_IPV6_ADDR3);
+  in6_addr.in6_u.u6_addr16[4] = HTONS(RNDIS_ROUTER_IPV6_ADDR4);
+  in6_addr.in6_u.u6_addr16[5] = HTONS(RNDIS_ROUTER_IPV6_ADDR5);
+  in6_addr.in6_u.u6_addr16[6] = HTONS(RNDIS_ROUTER_IPV6_ADDR6);
+  in6_addr.in6_u.u6_addr16[7] = HTONS(RNDIS_ROUTER_IPV6_ADDR7);
+  netlib_add_ipv6addr(devname, &in6_addr, RNDIS_ROUTER_IPV6_PREFLEN);
+  netlib_set_dripv6addr(devname, &in6_addr);
 
   /* Set start ip */
   addr.s_addr = RNDIS_ROUTER_DHCPD_STARTIP;
@@ -77,11 +100,11 @@ void rndis_router_setup(struct net_driver_s *dev)
 
   dhcpd_start(devname);
 
-  uinfo("%s dhcpd started\n", __func__);
+  ninfo("%s dhcpd started\n", __func__);
 }
 
 void rndis_router_teardown(struct net_driver_s *dev)
 {
     dhcpd_stop();
-    uinfo("%s dhcpd stoped\n", __func__);
+    ninfo("%s dhcpd stoped\n", __func__);
 }

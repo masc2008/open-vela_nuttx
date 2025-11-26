@@ -201,7 +201,6 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev);
 #endif
 
 void rndis_set_wifi_host_mac_addr(FAR const uint8_t *mac_address);
-void rndis_set_media_netdev(FAR struct net_driver_s *netdev);
 bool rndis_is_inited(void);
 void rndis_receive_eth_data(uint8_t *data,uint16_t len, bool isARP);
 void rndis_receive_eth_data_with_hdr(uint8_t *data,uint16_t len, bool isARP);

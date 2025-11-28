@@ -265,7 +265,7 @@ switch_el:
 #ifdef CONFIG_BES_ARM64_BOOT_EL1AARCH32
     mov_imm    x0, ((0x7 << SPSR_DAIF_SHIFT) | SPSR_MODE_MASK | BIT(4))
     msr   spsr_el2, x0
-    mov_imm x0, 0x80100000
+    mov_imm x0, 0x80100020
 #else
     mov_imm    x0, (SPSR_DAIF_MASK | SPSR_MODE_EL1T)
     msr   spsr_el2, x0

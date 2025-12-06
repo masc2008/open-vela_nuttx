@@ -126,6 +126,19 @@ static bool quota_is_valid(FAR struct netdev_lowerhalf_s *lower)
       total += netdev_lower_quota_load(lower, type);
     }
 
+  /* To avoid memory waste caused by pre-allocated IOB buffers.
+   * 1. For the multi-core zero-copy version:
+   *    The APC0 core only needs to pre-allocate IOB buffers for TX operations;
+   *    The APC1 core does not need to pre-allocate IOB buffers for TX/RX operations,
+   *    as RX buffers are pre-allocated in the driver.
+   * 2. For the multi-core non-zero-copy version:
+   *    The APC1 core does not need to pre-allocate IOB buffers for RX operations,
+   *    since RX buffers are pre-allocated in the driver.
+   * 3. For the single-core zero-copy version:
+   *    The core running the Wi-Fi module does not need to pre-allocate IOB buffers for RX operations,
+   *    because RX buffers are pre-allocated in the driver.
+   */
+#if 0
   if (total > NETPKT_BUFNUM)
     {
       nerr("ERROR: Too big quota when registering device: %d\n", total);
@@ -138,6 +151,7 @@ static bool quota_is_valid(FAR struct netdev_lowerhalf_s *lower)
             "than half of the network buffers, which may hurt performance. "
             "Please consider decreasing driver quota or increasing nIOB.\n");
     }
+#endif
 
   return true;
 }

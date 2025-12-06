@@ -330,15 +330,16 @@ static const struct uart_ops_s g_uartops =
 static bool cdcuart_txready(FAR struct uart_dev_s *dev)
 {
   FAR struct cdcacm_dev_s *priv = dev->priv;
-  FAR struct usbdev_ep_s *ep = priv->epbulkin;
+  FAR struct usbdev_ep_s *ep = NULL;
 
   if (sq_empty(&priv->txfree))
     {
       priv->ispolling = true;
-      EP_POLL(ep);
+      ep = priv->epbulkin;
+      if (ep)
+          EP_POLL(ep);
       priv->ispolling = false;
     }
-
   return !sq_empty(&priv->txfree);
 }
 
@@ -392,6 +393,9 @@ static ssize_t cdcuart_sendbuf(FAR struct uart_dev_s *dev,
     {
       usbtrace(TRACE_CLSERROR(USBSER_TRACEERR_SUBMITFAIL),
                (uint16_t)-ret);
+      sq_addlast((FAR sq_entry_t *)wrcontainer, &priv->txfree);
+      priv->nwrq++;
+
       return ret;
     }
 
@@ -792,6 +796,8 @@ static int cdcacm_serialstate(FAR struct cdcacm_dev_s *priv)
   if (ret < 0)
     {
       usbtrace(TRACE_CLSERROR(USBSER_TRACEERR_SUBMITFAIL), (uint16_t)-ret);
+      sq_addlast((FAR sq_entry_t *)wrcontainer, &priv->txfree);
+      priv->nwrq++;
     }
 
 errout_with_flags:
@@ -1510,6 +1516,7 @@ static void cdcacm_unbind(FAR struct usbdevclass_driver_s *driver,
         {
           sq_addlast((FAR sq_entry_t *)priv->wrcontainer, &priv->txfree);
           priv->nwrq++;
+          priv->wrcontainer = NULL;
         }
       DEBUGASSERT(priv->nwrq == CONFIG_CDCACM_NWRREQS);
 #endif
@@ -2007,6 +2014,9 @@ static void cdcacm_disconnect(FAR struct usbdevclass_driver_s *driver,
   /* Inform the "upper half serial driver that we have lost the USB serial
    * connection.
    */
+#ifdef CONFIG_SYSLOG_CDCACM
+  g_syslog_cdcacm = NULL;
+#endif
 
 #ifdef CONFIG_SERIAL_REMOVABLE
   uart_connected(&priv->serdev, false);
@@ -3184,13 +3194,20 @@ static void cdcacm_rcvpacket(FAR struct cdcacm_dev_s *priv)
 
 ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
 {
-  FAR struct cdcacm_dev_s *priv = g_syslog_cdcacm;
   size_t len = 0;
+  irqstate_t flags;
+  const clock_t timeout = MSEC2TICK(10);
+  clock_t start;
+  FAR struct cdcacm_dev_s *priv = NULL;
 
-  while (len < buflen)
+  start = clock_systime_ticks();
+  while (len < buflen && ((clock_systime_ticks() - start) < timeout))
     {
+      flags = enter_critical_section();
+      priv = g_syslog_cdcacm;
       if (!priv || !(priv->ctrlline & CDC_DTE_PRESENT))
         {
+          leave_critical_section(flags);
           return -EINVAL;
         }
 
@@ -3201,11 +3218,12 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
                                         buflen - len);
           if (ret < 0)
             {
+              leave_critical_section(flags);
               return ret;
             }
-
           len += ret;
         }
+      leave_critical_section(flags);
     }
 
   return buflen;

@@ -46,7 +46,7 @@ if(CONFIG_USBDEV)
   endif()
 
   if(CONFIG_RNDIS)
-    list(APPEND SRCS rndis.c)
+    list(APPEND SRCS rndis.c rndis_dhcpd.c)
   endif()
 
   if(CONFIG_DFU)
@@ -55,6 +55,10 @@ if(CONFIG_USBDEV)
 
   if(CONFIG_USBADB)
     list(APPEND SRCS adb.c)
+  endif()
+
+  if(CONFIG_USBMTP)
+    list(APPEND SRCS mtp.c)
   endif()
 
   if(CONFIG_NET_CDCECM)

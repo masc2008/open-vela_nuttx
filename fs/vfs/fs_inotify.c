@@ -1157,7 +1157,7 @@ out:
 
 out_free:
   file_put(filep);
-  fs_heap_free(abspath);
+  lib_free(abspath);
   if (ret < 0)
     {
       set_errno(-ret);

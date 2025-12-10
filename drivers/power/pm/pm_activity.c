@@ -403,7 +403,7 @@ void pm_wakelock_relax(FAR struct pm_wakelock_s *wakelock)
   /* Get a convenience pointer to minimize all of the indexing */
 #ifdef CONFIG_PM_PROCFS
   if(wakelock->wakelock_cb[0] != 0)
-    memset(wakelock->wakelock_cb, 0, PM_DUMP_DEPTH);
+    memset(wakelock->wakelock_cb, 0, sizeof(wakelock->wakelock_cb[0]) * PM_DUMP_DEPTH);
 #endif
   domain = wakelock->domain;
   pdom   = &g_pmdomains[domain];

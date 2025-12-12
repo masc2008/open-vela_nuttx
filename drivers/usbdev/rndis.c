@@ -510,6 +510,7 @@ static struct net_driver_s  *g_rndis_netdev = NULL;
 
 static struct net_driver_s  *g_media_netdev = NULL;
 extern FAR struct dhcpd_state_s g_ds_data;
+static int rndis_rxdispatch_pid = 0;
 
 struct rndis_netpkt_s rndis_netpackets[CONFIG_RNDIS_NWRREQS];
 struct sq_queue_s rndis_free_netpkt_lst;     /* List of free netpackets containers */
@@ -3906,12 +3907,15 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev)
       sq_addlast((FAR sq_entry_t *)packetcontainer, &rndis_free_netpkt_lst);
       leave_critical_section(flags);
     }
+  if (rndis_rxdispatch_pid <= 0)
+    {
+      rndis_rxdispatch_pid = task_create("rndis_rxdispatch", 128, CONFIG_DEFAULT_TASK_STACKSIZE, rndis_rxdispatch_task_run, NULL);
+      if (rndis_rxdispatch_pid < 0)
+        {
+          uerr("ERROR: Failed to start the rndis_rxdispatch task.\n");
+        }
+    }
 
-  int pid = task_create("rndis_rxdispatch", 128, CONFIG_DEFAULT_TASK_STACKSIZE, rndis_rxdispatch_task_run, NULL);
-  if (pid < 0)
-  {
-    uerr("ERROR: Failed to start the rndis_rxdispatch task.\n");
-  }
 
 #if defined(CONFIG_BES_MODEM)
   RIL_RegisterInterfaceStateUpdate(rndis_notify_netdev_conn_stat);

@@ -153,7 +153,7 @@ ssize_t syslog_write_foreach(FAR const char *buffer,
 
                   if (ret < 0)
                     {
-                      return ret;
+                      continue;
                     }
 
                   nwritten = head + 1;
@@ -166,7 +166,7 @@ ssize_t syslog_write_foreach(FAR const char *buffer,
               ret = write(channel, buffer + nwritten, buflen - nwritten);
               if (ret < 0)
                 {
-                  return ret;
+                  continue;
                 }
               else
                 {

@@ -657,6 +657,7 @@ static void convert_to_imgdatafmt(FAR video_format_t *video,
         break;
 
       case V4L2_PIX_FMT_JPEG:
+      case V4L2_PIX_FMT_MJPEG:
         data->pixelformat = IMGDATA_PIX_FMT_JPEG;
         break;
 
@@ -703,6 +704,7 @@ static void convert_to_imgsensorfmt(FAR video_format_t *video,
         break;
 
       case V4L2_PIX_FMT_JPEG:
+      case V4L2_PIX_FMT_MJPEG:
         sensor->pixelformat = IMGSENSOR_PIX_FMT_JPEG;
         break;
 
@@ -1361,6 +1363,7 @@ static size_t get_bufsize(FAR video_format_t *vf)
       default:
         return ret * 2;
       case V4L2_PIX_FMT_JPEG:
+      case V4L2_PIX_FMT_MJPEG:
       case V4L2_PIX_FMT_ENTROPY:
         return ret;
     }
@@ -2627,6 +2630,7 @@ static int capture_try_fmt(FAR struct file *filep,
       case V4L2_PIX_FMT_RGB565:
       case V4L2_PIX_FMT_JPEG:
       case V4L2_PIX_FMT_ENTROPY:
+      case V4L2_PIX_FMT_MJPEG:
       case V4L2_PIX_FMT_JPEG_WITH_SUBIMG:
       case V4L2_PIX_FMT_H264:
         nr_fmt = 1;

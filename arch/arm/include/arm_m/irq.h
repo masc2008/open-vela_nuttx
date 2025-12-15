@@ -620,7 +620,7 @@ static inline_function uintptr_t up_getusrsp(void *regs)
 
 static inline_function bool up_interrupt_context(void)
 {
-  return getipsr() != 0 || getprimask() != 0;
+  return getipsr() != 0;
 }
 
 /****************************************************************************

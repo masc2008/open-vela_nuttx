@@ -1158,6 +1158,11 @@ menuconfig RNDIS
 
 if RNDIS
 
+config BES_RNDIS
+	bool "BES RNDIS support"
+	default n
+	depends on RNDIS
+
 config RNDIS_NWRREQS
 	int "The number of write requests that can be in flight"
 	default 4 if NET_TCP_WRITE_BUFFERS

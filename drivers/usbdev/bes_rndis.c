@@ -194,7 +194,7 @@ struct rndis_dev_s
   size_t response_queue_words;           /* Count of words waiting in response_queue. */
   uint32_t response_queue[RNDIS_RESP_QUEUE_WORDS];
   uint32_t status;                       /* Status indicator */
-  sem_t send_sem;                        /* Send RNDIS packet semaphore */
+  // sem_t send_sem;                        /* Send RNDIS packet semaphore */
 };
 
 /* The internal version of the class driver */
@@ -509,6 +509,7 @@ static struct net_driver_s  *g_rndis_netdev = NULL;
 static struct net_driver_s  *g_media_netdev = NULL;
 extern FAR struct dhcpd_state_s g_ds_data;
 static int rndis_rxdispatch_pid = 0;
+static sem_t g_send_sem;
 
 struct rndis_netpkt_s rndis_netpackets[CONFIG_RNDIS_NWRREQS];
 struct sq_queue_s rndis_free_netpkt_lst;     /* List of free netpackets containers */
@@ -841,7 +842,7 @@ static void rndis_addpendingnetpkts(FAR struct rndis_dev_s *priv)
   leave_critical_section(flags);
 }
 
-static FAR struct rndis_netpkt_s *rndis_remfirstpendingnetpkts(FAR struct rndis_dev_s *priv)
+static FAR struct rndis_netpkt_s *rndis_remfirstpendingnetpkts(void)
 {
   FAR struct rndis_netpkt_s *netpkt = NULL;
   irqstate_t flags = enter_critical_section();
@@ -1411,23 +1412,16 @@ static int rndis_rxdispatch_task_run(int argc, char **argv)
 
   do
   {
-    osDelay(10);
-  } while (NULL == g_rndis_netdev);
-
-  priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
-
-  do
-  {
-    nxsem_wait(&priv->send_sem);
-    netpkt = rndis_remfirstpendingnetpkts(priv);
-    if (NULL == netpkt)
+    nxsem_wait(&g_send_sem);
+    uinfo("[radis_sw] rndis enter sem:0x%p\n", &g_send_sem);
+    net_lock();
+    netpkt = rndis_remfirstpendingnetpkts();
+    if (NULL == g_rndis_netdev || NULL == netpkt)
     {
-      osDelay(10);
+      net_unlock();
       continue;
     }
-
-    net_lock();
-
+    priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
     hdr = (FAR struct eth_hdr_s *)&netpkt->buf[RNDIS_PACKET_HDR_SIZE];
 
     // memcpy(hdr->src, priv->host_mac_address,6);
@@ -1969,7 +1963,8 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
             rndis_block_rx(priv);
             uinfo("rndis_addpendingnetpkts\n");
             rndis_addpendingnetpkts(priv);
-            ret = nxsem_post(&priv->send_sem);
+            ret = nxsem_post(&g_send_sem);
+            uinfo("[radis_sw] rndis post sem:0x%p", &g_send_sem);
             if (ret)
               {
                 uerr("nxsem_post failed! ret: %d\n", ret);
@@ -3063,13 +3058,6 @@ static int usbclass_bind(FAR struct usbdevclass_driver_s *driver,
       leave_critical_section(flags);
     }
 
-  ret = nxsem_init(&priv->send_sem, 0, 0);
-  if (ret != OK)
-    {
-      uerr("nxsem_init failed. ret: %d\n", ret);
-      goto errout;
-    }
-
   /* Initialize response queue to empty */
 
   priv->response_queue_words = 0;
@@ -3731,11 +3719,11 @@ static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
 {
   FAR struct rndis_driver_s *drvr = (FAR struct rndis_driver_s *)classdev;
   FAR struct rndis_alloc_s *alloc = (FAR struct rndis_alloc_s *)drvr->dev;
-
+  net_lock();
   g_rndis_netdev = NULL;
-
   // netdev_unregister(&drvr->dev->netdev);
   kmm_free(alloc);
+  net_unlock();
 }
 
 /****************************************************************************
@@ -3915,6 +3903,12 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev)
     }
   if (rndis_rxdispatch_pid <= 0)
     {
+      int ret = nxsem_init(&g_send_sem, 0, 0);
+      uinfo("[radis_sw] rndis init sem:0x%p", &g_send_sem);
+      if (ret != OK)
+        {
+          uerr("nxsem_init failed. ret: %d\n", ret);
+        }
       rndis_rxdispatch_pid = task_create("rndis_rxdispatch", 128, CONFIG_DEFAULT_TASK_STACKSIZE, rndis_rxdispatch_task_run, NULL);
       if (rndis_rxdispatch_pid < 0)
         {

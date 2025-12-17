@@ -101,5 +101,7 @@ FAR sigq_t *nxsig_alloc_pendingsigaction(void)
         }
     }
 
+  DEBUGASSERT(sigq);
+
   return sigq;
 }

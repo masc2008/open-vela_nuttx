@@ -48,8 +48,9 @@ if(CONFIG_USBDEV)
   if(CONFIG_RNDIS)
     if(CONFIG_BES_RNDIS)
       list(APPEND SRCS bes_rndis.c bes_rndis_dhcpd.c)
-    else
+    else()
       list(APPEND SRCS rndis.c)
+    endif()
   endif()
 
   if(CONFIG_DFU)

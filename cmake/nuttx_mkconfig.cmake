@@ -160,4 +160,8 @@ file(APPEND ${CONFIG_H} "#ifndef CONFIG_FLASH_END\n")
 file(APPEND ${CONFIG_H}
      "#  define CONFIG_FLASH_END (CONFIG_FLASH_START+CONFIG_FLASH_SIZE)\n")
 file(APPEND ${CONFIG_H} "#endif\n\n")
+file(APPEND ${CONFIG_H} "#ifdef CONFIG_BINDER_IPC_32BIT\n")
+file(APPEND ${CONFIG_H}
+     "#  define BINDER_IPC_32BIT 1\n")
+file(APPEND ${CONFIG_H} "#endif\n\n")
 file(APPEND ${CONFIG_H} "#endif /* __INCLUDE_NUTTX_CONFIG_H */\n")

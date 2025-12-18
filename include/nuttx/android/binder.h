@@ -150,6 +150,7 @@ enum flat_binder_object_flags
 #ifdef BINDER_IPC_32BIT
 typedef uint32_t binder_size_t;
 typedef uint32_t binder_uintptr_t;
+typedef uint32_t binder_unaligned_uintptr_t __attribute__((aligned(1)));
 #else
 typedef uint64_t binder_size_t;
 typedef uint64_t binder_uintptr_t;

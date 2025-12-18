@@ -110,6 +110,9 @@ int main(int argc, char **argv, char **envp)
     "#ifndef CONFIG_FLASH_END\n"
     "#  define CONFIG_FLASH_END (CONFIG_FLASH_START+CONFIG_FLASH_SIZE)\n"
     "#endif\n\n"
+    "#ifdef CONFIG_BINDER_IPC_32BIT\n"
+    "#  define BINDER_IPC_32BIT 1\n"
+    "#endif\n\n"
     "#endif /* __INCLUDE_NUTTX_CONFIG_H */\n");
 
   fclose(stream);

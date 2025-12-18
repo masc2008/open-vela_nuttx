@@ -425,7 +425,7 @@ static ssize_t pm_read_wakelock(FAR struct file *filep, FAR char *buffer,
         int ret = 0;
         for (size_t i = 0; i < PM_DUMP_DEPTH - PM_SKIP_DEPTH; i++)
         {
-          ret += snprintf(pmfile->line + linesize + ret, PM_LINELEN - linesize - ret, " %ld", (uint32_t)wakelock->wakelock_cb[i] | 1);
+          ret += snprintf(pmfile->line + linesize + ret, PM_LINELEN - linesize - ret, " %lx", (uint32_t)wakelock->wakelock_cb[i] | 1);
           if ((PM_LINELEN - linesize - ret) < 13)
             break;
         }

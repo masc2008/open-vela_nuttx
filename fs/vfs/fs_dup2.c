@@ -140,6 +140,11 @@ int file_dup2(FAR struct file *filep1, FAR struct file *filep2)
 
       if (ret < 0)
         {
+          filep2->f_oflags = 0;
+          filep2->f_priv  = NULL;
+          filep2->f_pos   = NULL;
+          filep2->f_inode = NULL;
+
           inode_release(inode);
         }
     }

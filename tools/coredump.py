@@ -111,6 +111,14 @@ def mmap_file(file_path, size=None):
             size = os.fstat(fd).st_size
         return mmap.mmap(fd, size, access=mmap.ACCESS_READ)
 
+def is_text_file(path, sample_size=2048):
+    with open(path, 'rb') as f:
+        sample = f.read(sample_size)
+    try:
+        sample.decode('utf-8')
+        return True
+    except UnicodeDecodeError:
+        return False
 
 def parse_args():
     global args
@@ -120,7 +128,7 @@ def parse_args():
         allow_abbrev=False,
     )
     parser.add_argument("input")
-    parser.add_argument("-o", "--output", help="Output file in hex.")
+    parser.add_argument("-o", "--output", help="Output core file.")
     parser.add_argument(
         "-b",
         "--binary",
@@ -131,15 +139,19 @@ def parse_args():
     args = parser.parse_args()
 
 def extract_coredump_section(input_file, output_file=None):
+    # 非文本（或显式指定二进制）则直接返回原文件路径
+    if args.binary or not is_text_file(input_file):
+        return input_file, False  # False 表示后续按二进制处理
+
     if output_file is None:
         base_name = os.path.splitext(input_file)[0]
-        output_file = f"{base_name}"
+        output_file = f"{base_name}.txt"
 
     start_marker = "coredump_dump_syslog: Start coredump:"
     end_marker = "coredump_dump_syslog: Finish coredump"
 
     try:
-        with open(input_file, 'r') as infile, open(output_file, 'w') as outfile:
+        with open(input_file, 'r', encoding='utf-8') as infile, open(output_file, 'w') as outfile:
             inside_coredump = False
             coredump_lines = []
 
@@ -160,13 +172,14 @@ def extract_coredump_section(input_file, output_file=None):
             if coredump_lines:
                 outfile.writelines(coredump_lines)
                 print(f"Coredump section successfully extracted to {output_file}")
-                return output_file
+                return output_file, True  # True 表示文本路径
             else:
                 print("No coredump section found in the input file", file=sys.stderr)
-                return False
+                return input_file, False
     except IOError as e:
         print(f"Error accessing files: {e}", file=sys.stderr)
-        return None
+        return None, False
+
 
 def main():
     parse_args()

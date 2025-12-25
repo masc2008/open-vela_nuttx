@@ -20,7 +20,9 @@
 *.lst
 *.map
 *.o
+*.su
 *.obj
+*.su
 *.profraw
 *.rel
 *.src

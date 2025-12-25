@@ -1,3 +1,4 @@
 compiler-rt-*.src.tar.xz
 *.o
+*.su
 .depend

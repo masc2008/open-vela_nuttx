@@ -3199,6 +3199,7 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
   const clock_t timeout = MSEC2TICK(10);
   clock_t start;
   FAR struct cdcacm_dev_s *priv = NULL;
+  static int sending_state = 0; // used to avoid being called repeatedly
 
   start = clock_systime_ticks();
   while (len < buflen && ((clock_systime_ticks() - start) < timeout))
@@ -3211,6 +3212,13 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
           return -EINVAL;
         }
 
+      if (sending_state == 1)
+       {
+         leave_critical_section(flags);
+         return -EBUSY;
+       }
+      sending_state = 1;
+
       if (cdcuart_txready(&priv->serdev))
         {
           ssize_t ret = cdcuart_sendbuf(&priv->serdev,
@@ -3218,11 +3226,14 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
                                         buflen - len);
           if (ret < 0)
             {
+              sending_state = 0;
               leave_critical_section(flags);
               return ret;
             }
           len += ret;
         }
+
+      sending_state = 0;
       leave_critical_section(flags);
     }
 

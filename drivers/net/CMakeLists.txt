@@ -34,7 +34,11 @@ if(CONFIG_NET)
   endif()
 
   if(CONFIG_NET_RPMSG_DRV)
-    list(APPEND SRCS rpmsgdrv.c)
+    if(CONFIG_BES_NET_RPMSG_DRV)
+      list(APPEND SRCS bes_rpmsgdrv.c)
+    else()
+      list(APPEND SRCS rpmsgdrv.c)
+    endif()
   endif()
 
   if(CONFIG_NETDEV_TELNET)

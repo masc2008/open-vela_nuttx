@@ -40,6 +40,15 @@ config NET_RPMSG_DRV
 
 if NET_RPMSG_DRV
 
+config BES_NET_RPMSG_DRV
+	bool "BES RPMSG net driver"
+	default n
+	depends on RPMSG
+	---help---
+	To fully support rpmsg net driver, needs to adjust RPTUN_M55C0_2_M55C1_BUFFER_SIZE to 0x800.
+	The setting is in file like openamp/rptun/bes/chips/best1700/config.mk.
+	The reason is: network MTU is around: 1500.
+
 config NET_RPMSG_PRIORITY
 	int "net prmsg priority"
 	default 100

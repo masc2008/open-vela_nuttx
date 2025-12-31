@@ -35,7 +35,11 @@ ifeq ($(CONFIG_NET_LOOPBACK),y)
 endif
 
 ifeq ($(CONFIG_NET_RPMSG_DRV),y)
-  CSRCS += rpmsgdrv.c
+  ifeq ($(CONFIG_BES_NET_RPMSG_DRV),y)
+    CSRCS += bes_rpmsgdrv.c
+  else
+    CSRCS += rpmsgdrv.c
+  endif
 endif
 
 ifeq ($(CONFIG_NETDEV_TELNET),y)

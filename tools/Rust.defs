@@ -75,5 +75,9 @@ else ifeq ($(CONFIG_ARCH_RISCV),y)
 else
   # For arm, but there are some other archs not support yet,
   # such as xtensa, x86 bare metal, etc.
-  RUSTFLAGS += --target $(LLVM_ARCHTYPE)-none-$(LLVM_ABITYPE)
+
+  # Sanitize LLVM_ARCHTYPE by stripping everything after the first '+'
+  # Example: thumbv8m.main+dsp+mve.fp+fp.dp -> thumbv8m.main
+  RUST_ARCHTYPE := $(firstword $(subst +, ,$(LLVM_ARCHTYPE)))
+  RUSTFLAGS += --target $(RUST_ARCHTYPE)-none-$(LLVM_ABITYPE)
 endif

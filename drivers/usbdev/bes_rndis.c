@@ -226,6 +226,12 @@ struct rndis_oid_value_s
   FAR const void *data;                /* Data pointer overrides value if non-NULL. */
 };
 
+typedef void (*intf_state_update_cb_t)(char *name, bool up);
+
+extern void RIL_RegisterInterfaceStateUpdate(intf_state_update_cb_t cb);
+
+extern bool RIL_InterfaceGetState(char *name);
+
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
@@ -237,7 +243,7 @@ static int rndis_ifdown(FAR struct net_driver_s *dev);
 static int rndis_txavail(FAR struct net_driver_s *dev);
 static int rndis_transmit(FAR struct rndis_dev_s *priv);
 static int rndis_txpoll(FAR struct net_driver_s *dev);
-
+static int bes_rndis_state_update(void);
 /* usbclass callbacks */
 
 static int  usbclass_setup(FAR struct usbdevclass_driver_s *driver,
@@ -554,6 +560,17 @@ static const struct rndis_oid_value_s g_rndis_oid_values[] =
  ****************************************************************************/
 
 static struct net_driver_s *g_rndis_netdev = NULL;
+
+static struct net_driver_s  *g_media_netdev = NULL;
+
+/* enable or disable rndis */
+static bool g_rndis_enabled = true;
+
+/* net output(wifi or lte) ready */
+static bool g_media_ready = true;
+
+/* pc rndis netdev state*/
+static bool pc_rndis_up = true;
 
 /****************************************************************************
  * Buffering of data is implemented in the following manner:
@@ -1180,7 +1197,8 @@ static int rndis_ifup(FAR struct net_driver_s *dev)
 {
   if (dev && !IFF_IS_RUNNING(dev->d_flags))
     {
-      dev->d_flags |= IFF_RUNNING;
+      if (g_media_ready == true)
+        dev->d_flags |= IFF_RUNNING;
     }
 
   return OK;
@@ -1644,6 +1662,7 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
                 {
                   ninfo("RNDIS is now connected");
                   priv->connected = true;
+                  pc_rndis_up = true;
                 }
             }
           else if (req->objid == RNDIS_OID_802_3_MULTICAST_LIST)
@@ -1683,6 +1702,21 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
         {
           FAR struct rndis_response_header *resp;
           size_t respsize = sizeof(struct rndis_response_header);
+
+          if (g_media_ready == false ||  g_rndis_enabled == false)
+            {
+              if (pc_rndis_up == true)
+                {
+                  pc_rndis_up = false;
+                  /* pc rndis down */
+                  bes_rndis_state_update();
+                }
+            }
+          else
+            {
+              pc_rndis_up = true;
+            }
+
           resp = rndis_prepare_response(priv, respsize, cmd_hdr);
           if (!resp)
             {
@@ -1818,62 +1852,6 @@ static void rndis_wrcomplete(FAR struct usbdev_ep_s *ep,
     }
 
   leave_critical_section(flags);
-}
-
-static FAR void *
-rndis_prepare_indicate_status(FAR struct rndis_dev_s *priv, size_t size, uint32_t status)
-{
-  size_t size_words = size / sizeof(uint32_t);
-  uint32_t *buf = priv->response_queue + priv->response_queue_words;
-  struct rndis_indicate_msg *hdr = (struct rndis_indicate_msg *)buf;
-
-  if (priv->response_queue_words + size_words > RNDIS_RESP_QUEUE_WORDS)
-    {
-      nerr("RNDIS response queue full, dropping command %08x", status);
-      return NULL;
-    }
-
-  hdr->msgtype   = RNDIS_INDICATE_MSG;
-  hdr->msglen    = size;
-  hdr->status    = status;
-  hdr->buflen    = 0;
-  hdr->bufoffset = 0;
-
-  return hdr;
-}
-
-void rndis_ip_stream_enable(bool enable)
-{
-  struct rndis_dev_s *priv = NULL;
-  FAR struct rndis_response_header *resp;
-  size_t respsize = sizeof(struct rndis_indicate_msg);
-
-  syslog(LOG_INFO, "%s: enable:%d g_rndis_netdev:%p\n", __func__, enable, g_rndis_netdev);
-
-  if (g_rndis_netdev)
-    {
-      priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
-
-      if (enable)
-        {
-          usbclass_setconfig(priv, RNDIS_CONFIGID);
-          resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_CONNECT);
-          if (!resp)
-            return -ENOMEM;
-          rndis_send_encapsulated_response(priv, respsize);
-
-          netdev_carrier_on(g_rndis_netdev);
-        }
-      else
-        {
-          netdev_carrier_off(g_rndis_netdev);
-
-          resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_DISCONNECT);
-          if (!resp)
-            return -ENOMEM;
-          rndis_send_encapsulated_response(priv, respsize);
-        }
-    }
 }
 
 /****************************************************************************
@@ -3138,6 +3116,137 @@ int usbdev_rndis_set_host_mac_addr(FAR struct net_driver_s *netdev,
   return OK;
 }
 
+static FAR void *
+rndis_prepare_indicate_status(FAR struct rndis_dev_s *priv, size_t size, uint32_t status)
+{
+  size_t size_words = size / sizeof(uint32_t);
+  uint32_t *buf = priv->response_queue + priv->response_queue_words;
+  struct rndis_indicate_msg *hdr = (struct rndis_indicate_msg *)buf;
+
+  if (priv->response_queue_words + size_words > RNDIS_RESP_QUEUE_WORDS)
+    {
+      nerr("RNDIS response queue full, dropping command %08x\n", status);
+      return NULL;
+    }
+
+  hdr->msgtype   = RNDIS_INDICATE_MSG;
+  hdr->msglen    = size;
+  hdr->status    = status;
+  hdr->buflen    = 0;
+  hdr->bufoffset = 0;
+
+  return hdr;
+}
+
+static int bes_rndis_state_update(void)
+{
+  struct rndis_dev_s *priv = NULL;
+  FAR struct rndis_response_header *resp;
+
+  if (g_rndis_netdev)
+    {
+      priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
+      size_t respsize = sizeof(struct rndis_indicate_msg);
+
+      if (g_media_ready && g_rndis_enabled)
+        {
+          usbclass_setconfig(priv, RNDIS_CONFIGID);
+
+          resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_CONNECT);
+          if (!resp)
+            return -ENOMEM;
+          rndis_send_encapsulated_response(priv, respsize);
+
+          /* bes_rndis_start */
+          if (up_interrupt_context())
+            {
+              if (g_rndis_netdev && !IFF_IS_RUNNING(g_rndis_netdev->d_flags))
+                {
+                  g_rndis_netdev->d_flags |= IFF_RUNNING;
+                }
+            }
+          else
+            {
+              netdev_carrier_on(g_rndis_netdev);
+            }
+        }
+      else
+        {
+          /* bes_rndis_stop */
+          if (up_interrupt_context())
+            {
+              if (g_rndis_netdev && IFF_IS_RUNNING(g_rndis_netdev->d_flags))
+                {
+                  g_rndis_netdev->d_flags &= ~IFF_RUNNING;
+                }
+            }
+          else
+            {
+              netdev_carrier_on(g_rndis_netdev);
+            }
+
+          netdev_carrier_off(g_rndis_netdev);
+
+          resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_DISCONNECT);
+          if (!resp)
+            return -ENOMEM;
+          rndis_send_encapsulated_response(priv, respsize);
+        }
+    }
+
+  return 0;
+}
+
+void rndis_ip_stream_enable(bool enable)
+{
+  ninfo("enable:%d \n", enable);
+
+  net_lock();
+
+  if (g_rndis_enabled != enable)
+    {
+      g_rndis_enabled = enable;
+
+      bes_rndis_state_update();
+    }
+
+  net_unlock();
+}
+
+void rndis_set_media_netdev(FAR struct net_driver_s *netdev)
+{
+  if (netdev)
+    g_media_netdev = netdev;
+}
+
+#if defined(CONFIG_BES_MODEM)
+static void rndis_notify_netdev_conn_stat(char *name, bool connected)
+{
+  ninfo("notify name:%s connected:%d\n", name, connected);
+
+  if (g_media_netdev && (!strcmp(name, g_media_netdev->d_ifname)))
+  {
+    net_lock();
+
+    if (g_media_ready != connected)
+      {
+        g_media_ready = connected;
+
+        bes_rndis_state_update();
+      }
+
+    net_unlock();
+  }
+  else
+  {
+    if (g_media_netdev)
+      uerr("notify name:%s connected:%d d_ifname:%s\n", name, connected, g_media_netdev->d_ifname);
+    else
+      uerr("notify name:%s connected:%d g_media_netdev == NULL\n", name, connected);
+  }
+}
+#endif
+
 /****************************************************************************
  * Name: usbdev_rndis_get_composite_devdesc
  *
@@ -3199,5 +3308,13 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev)
    */
 
   dev->devinfo.nendpoints  = RNDIS_NUM_EPS;
+
+#if defined(CONFIG_BES_MODEM)
+  RIL_RegisterInterfaceStateUpdate(rndis_notify_netdev_conn_stat);
+  if (g_media_netdev)
+    g_media_ready = RIL_InterfaceGetState(g_media_netdev->d_ifname);
+  else
+    g_media_ready = RIL_InterfaceGetState(CONFIG_BES_MODEM_NET_INTERFACE);
+#endif
 }
 #endif

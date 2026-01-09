@@ -410,6 +410,7 @@ static void net_reset_ipv4_cache(void)
 
   for (i = 0; i < CONFIG_ROUTE_MAX_IPv4_CACHEROUTES; i++)
     {
+      memset(&g_prealloc_ipv4cache[i], 0, sizeof(g_prealloc_ipv4cache[i]));
       net_add_newest_ipv4(&g_prealloc_ipv4cache[i]);
     }
 }
@@ -427,6 +428,7 @@ static void net_reset_ipv6_cache(void)
 
   for (i = 0; i < CONFIG_ROUTE_MAX_IPv6_CACHEROUTES; i++)
     {
+      memset(&g_prealloc_ipv6cache[i], 0, sizeof(g_prealloc_ipv6cache[i]));
       net_add_newest_ipv6(&g_prealloc_ipv6cache[i]);
     }
 }

@@ -79,11 +79,24 @@ static void nxmq_rcvtimeout(wdparm_t arg)
    * punch and already changed the task's state.
    */
 
+  if (wtcb->task_state == TSTATE_TASK_RUNNING) {
+    _warn("wtcb[%d]:%s,this_task()[%d]:%s, wtcb->task_state=%d\n", wtcb->pid, wtcb->name, this_task()->pid, this_task()->name, wtcb->task_state);
+  }
   if (wtcb->task_state == TSTATE_WAIT_MQNOTEMPTY)
     {
       /* Restart with task with a timeout error */
 
       nxmq_wait_irq(wtcb, ETIMEDOUT);
+    }
+  else if (wtcb->task_state == TSTATE_TASK_RUNNING)
+    {
+      /* Indicate that the wait is over. */
+
+      wtcb->waitobj = NULL;
+
+      /* Mark the errno value for the thread. */
+
+      wtcb->errcode = ETIMEDOUT;
     }
 
   /* Interrupts may now be re-enabled. */
@@ -147,6 +160,8 @@ int nxmq_wait_receive(FAR struct mqueue_inode_s *msgq,
     }
 #endif
 
+  rtcb->errcode = OK;
+
   if (abstime)
     {
       wd_start_realtime(&rtcb->waitdog, abstime,
@@ -156,6 +171,14 @@ int nxmq_wait_receive(FAR struct mqueue_inode_s *msgq,
     {
       wd_start(&rtcb->waitdog, ticks,
                nxmq_rcvtimeout, (wdparm_t)rtcb);
+    }
+
+  if (rtcb->waitobj == NULL && rtcb->errcode == ETIMEDOUT)
+    {
+      /* Timed out already before waiting */
+
+      newmsg = NULL;
+      goto out;
     }
 
   /* Get the message from the head of the queue */
@@ -197,6 +220,7 @@ int nxmq_wait_receive(FAR struct mqueue_inode_s *msgq,
         }
     }
 
+out:
   if (abstime || ticks >= 0)
     {
       wd_cancel(&rtcb->waitdog);

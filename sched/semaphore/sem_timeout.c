@@ -35,6 +35,8 @@
 #include <nuttx/spinlock.h>
 
 #include "semaphore/semaphore.h"
+#include "sched/sched.h"
+#include "debug.h"
 
 /****************************************************************************
  * Public Functions
@@ -71,13 +73,25 @@ void nxsem_timeout(wdparm_t arg)
    * punch and already changed the task's state.
    */
 
+  if (wtcb->task_state == TSTATE_TASK_RUNNING) {
+    _warn("wtcb[%d]:%s,this_task()[%d]:%s, wtcb->task_state=%d\n", wtcb->pid, wtcb->name, this_task()->pid, this_task()->name, wtcb->task_state);
+  }
   if (wtcb->task_state == TSTATE_WAIT_SEM)
     {
       /* Cancel the semaphore wait */
 
       nxsem_wait_irq(wtcb, ETIMEDOUT);
     }
+  else if (wtcb->task_state == TSTATE_TASK_RUNNING)
+    {
+      /* Indicate that the wait is over. */
 
+      wtcb->waitobj = NULL;
+
+      /* Mark the errno value for the thread. */
+
+      wtcb->errcode = ETIMEDOUT;
+    }
   /* Interrupts may now be enabled. */
 
   leave_critical_section(flags);

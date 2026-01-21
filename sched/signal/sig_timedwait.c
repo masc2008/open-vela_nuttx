@@ -96,8 +96,10 @@ static void nxsig_timeout(wdparm_t arg)
   /* There may be a race condition -- make sure the task is
    * still waiting for a signal
    */
-
-  if (wtcb->task_state == TSTATE_WAIT_SIG)
+  if (wtcb->task_state == TSTATE_TASK_RUNNING) {
+    _warn("wtcb[%d]:%s,this_task()[%d]:%s, wtcb->task_state=%d\n", wtcb->pid, wtcb->name, this_task()->pid, this_task()->name, wtcb->task_state);
+  }
+  if (wtcb->task_state == TSTATE_WAIT_SIG || wtcb->task_state == TSTATE_TASK_RUNNING)
     {
       FAR struct tcb_s *rtcb = this_task();
 
@@ -113,17 +115,20 @@ static void nxsig_timeout(wdparm_t arg)
 #endif
         }
 
-      /* Remove the task from waiting list */
-
-      dq_rem((FAR dq_entry_t *)wtcb, list_waitingforsignal());
-
-      /* Add the task to ready-to-run task list, and
-       * perform the context switch if one is needed
-       */
-
-      if (nxsched_add_readytorun(wtcb))
+      if (wtcb->task_state == TSTATE_WAIT_SIG)
         {
-          nxsched_switch(this_task(), rtcb);
+          /* Remove the task from waitting list */
+
+          dq_rem((FAR dq_entry_t *)wtcb, list_waitingforsignal());
+
+          /* Add the task to ready-to-run task list, and
+          * perform the context switch if one is needed
+          */
+
+          if (nxsched_add_readytorun(wtcb))
+            {
+              up_switch_context(this_task(), rtcb);
+            }
         }
     }
 
@@ -252,6 +257,7 @@ int nxsig_clockwait(int clockid, int flags,
 {
   FAR struct tcb_s *rtcb = this_task();
   irqstate_t iflags;
+  siginfo_t unbinfo = {0};
   clock_t expect = 0u;
   clock_t stop   = 0u;
   int ret = OK;
@@ -298,6 +304,9 @@ int nxsig_clockwait(int clockid, int flags,
     {
       iflags = enter_critical_section();
 
+      if (rtcb->sigunbinfo == NULL)
+        rtcb->sigunbinfo = &unbinfo;
+
       if (rqtp)
         {
           /* Start the watchdog timer */
@@ -320,6 +329,13 @@ int nxsig_clockwait(int clockid, int flags,
             }
         }
 
+      if (unbinfo.si_signo == SIG_WAIT_TIMEOUT &&
+          unbinfo.si_code  == SI_TIMER &&
+          unbinfo.si_errno == ETIMEDOUT)
+        {
+          goto out;
+        }
+
       /* Remove the tcb task from the ready-to-run list. */
 
       nxsched_remove_self(rtcb);
@@ -334,12 +350,15 @@ int nxsig_clockwait(int clockid, int flags,
       nxsched_switch(this_task(), rtcb);
 
       /* We no longer need the watchdog */
-
+out:
       if (rqtp)
         {
           wd_cancel(&rtcb->waitdog);
           stop = clock_systime_ticks();
         }
+
+      if (rtcb->sigunbinfo == &unbinfo)
+        rtcb->sigunbinfo = NULL;
 
       leave_critical_section(iflags);
 
@@ -458,8 +477,6 @@ int nxsig_timedwait(FAR const sigset_t *set, FAR struct siginfo *info,
       /* Save the set of pending signals to wait for */
 
       rtcb->sigwaitmask = *set;
-
-      leave_critical_section(flags);
 
       ret = nxsig_clockwait(CLOCK_REALTIME, 0, timeout, NULL);
       if (ret >= 0)

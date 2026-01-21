@@ -357,8 +357,10 @@ static int pty_close(FAR struct file *filep)
 
       /* Close the contained file structures */
 
-      file_close(&dev->pd_src);
-      file_close(&dev->pd_sink);
+      file_close(&devpair->pp_master.pd_src);
+      file_close(&devpair->pp_slave.pd_sink);
+      file_close(&devpair->pp_slave.pd_src);
+      file_close(&devpair->pp_master.pd_sink);
     }
 
   /* Is this the last open reference?  If so, was the driver previously

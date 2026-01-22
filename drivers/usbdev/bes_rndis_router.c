@@ -39,6 +39,8 @@
 
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
+#include <../../../../apps/include/netutils/netlib.h>
+#include <../../../../apps/include/netutils/dhcpd.h>
 
 #define RNDIS_ROUTER_DHCPD_ROUTERIP     0xc0a82b01
 #define RNDIS_ROUTER_DHCPD_NETMASK      0xffffff00

@@ -1898,6 +1898,9 @@ static void usbclass_ep0incomplete(FAR struct usbdev_ep_s *ep,
         priv->response_queue_words -= len_words;
         memcpy(priv->response_queue, priv->response_queue + len_words,
                priv->response_queue_words * sizeof(uint32_t));
+        if (priv->response_queue_words > 0) {
+          rndis_send_encapsulated_response(priv, 0);
+        }
       }
     }
 }
@@ -2657,15 +2660,18 @@ static int usbclass_setup(FAR struct usbdevclass_driver_s *driver,
                   }
                 else
                   {
-                    /* Retrieve a single reply from the response queue to
-                     * control request buffer.
+                    /* Reply info as many as possible,
+                     * if host read less than cached, just send one msg to avoid msg trunction
                      */
 
                     FAR struct rndis_response_header *hdr =
                       (struct rndis_response_header *)priv->response_queue;
-                    memcpy(ctrlreq->buf, hdr, hdr->msglen);
+                    ret = priv->response_queue_words * sizeof(uint32_t);
+                    if (ret > len)
+                      ret = hdr->msglen;
+
+                    memcpy(ctrlreq->buf, hdr, ret);
                     ctrlreq->priv = priv;
-                    ret = hdr->msglen;
                   }
               }
           }
@@ -3182,10 +3188,9 @@ static int bes_rndis_state_update(void)
             }
           else
             {
-              netdev_carrier_on(g_rndis_netdev);
+              netdev_carrier_off(g_rndis_netdev);
             }
 
-          netdev_carrier_off(g_rndis_netdev);
 
           resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_DISCONNECT);
           if (!resp)

@@ -2661,7 +2661,7 @@ static int usbclass_setup(FAR struct usbdevclass_driver_s *driver,
                 else
                   {
                     /* Reply info as many as possible,
-                     * if host read less than cached, just send one msg to avoid msg trunction
+                     * if host read less than cached, just send one msg to avoid msg truncation
                      */
 
                     FAR struct rndis_response_header *hdr =
@@ -2998,14 +2998,25 @@ static int usbclass_classobject(int minor,
   strlcpy(priv->netdev.d_ifname, "rndis", IFNAMSIZ);
   ret = netdev_register(&priv->netdev, NET_LL_ETHERNET);
   if (ret)
-  {
-    nerr("Failed to register net device");
-  }
+    {
+      nerr("Failed to register net device");
+    }
   else
-  {
-    g_rndis_netdev = &priv->netdev;
-    rndis_router_setup(&priv->netdev);
-  }
+    {
+      if (g_media_netdev)
+        {
+          nat_enable(g_media_netdev);
+          ipforward_enable(g_media_netdev);
+        }
+      else
+        {
+          _err("should not happen, no media_netdev: %d\n", __LINE__);
+        }
+
+      ipforward_enable(&priv->netdev);
+      g_rndis_netdev = &priv->netdev;
+      rndis_router_setup(&priv->netdev);
+    }
 
   return ret;
 }
@@ -3018,6 +3029,15 @@ static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
   g_rndis_netdev = NULL;
 
   rndis_router_teardown(&drvr->dev->netdev);
+  if (g_media_netdev)
+    {
+      nat_disable(g_media_netdev);
+      ipforward_disable(g_media_netdev);
+    }
+  else
+    {
+      _err("should not happen, no media_netdev: %d\n", __LINE__);
+    }
   netdev_unregister(&drvr->dev->netdev);
   kmm_free(alloc);
 }

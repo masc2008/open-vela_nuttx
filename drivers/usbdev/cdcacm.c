@@ -2015,9 +2015,8 @@ static void cdcacm_disconnect(FAR struct usbdevclass_driver_s *driver,
   /* Inform the "upper half serial driver that we have lost the USB serial
    * connection.
    */
-#ifdef CONFIG_SYSLOG_CDCACM
-  g_syslog_cdcacm = NULL;
-#endif
+
+  priv->ctrlline = 0;
 
 #ifdef CONFIG_SERIAL_REMOVABLE
   uart_connected(&priv->serdev, false);
@@ -3224,6 +3223,14 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
           leave_critical_section(flags);
           return -EINVAL;
         }
+
+#ifdef CONFIG_SERIAL_REMOVABLE
+      if (priv->serdev.disconnected)
+        {
+          leave_critical_section(flags);
+          return -EINVAL;
+        }
+#endif
 
       if (sending_state == 1)
        {

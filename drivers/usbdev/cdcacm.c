@@ -68,6 +68,7 @@
 
 #define CDCACM_RXDELAY   (CLK_TCK / 5)
 
+#define CDC_TX_TIMEOUT_MAX 20
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -2876,8 +2877,10 @@ static bool cdcuart_rxflowcontrol(FAR struct uart_dev_s *dev,
 
 static void cdcuart_txint(FAR struct uart_dev_s *dev, bool enable)
 {
-  uint32_t retry = 100;
   FAR struct cdcacm_dev_s *priv;
+  const clock_t timeout = MSEC2TICK(2);
+  static uint32_t txint_timeout_cnt = 0;
+  clock_t start;
 
   usbtrace(CDCACM_CLASSAPI_TXINT, (uint16_t)enable);
 
@@ -2909,8 +2912,13 @@ static void cdcuart_txint(FAR struct uart_dev_s *dev, bool enable)
 
   /* wait for wrcontainer valid
    */
-  while (retry-- && !priv->wrcontainer)
+  while (!priv->wrcontainer && txint_timeout_cnt < CDC_TX_TIMEOUT_MAX)
     {
+      if (clock_systime_ticks() - start > timeout)
+        {
+          txint_timeout_cnt++;
+          break;
+        }
       if (up_interrupt_context() || sched_idletask())
         {
           irqstate_t flags;
@@ -2922,6 +2930,10 @@ static void cdcuart_txint(FAR struct uart_dev_s *dev, bool enable)
         {
           usleep(1000);
         }
+    }
+  if (priv->wrcontainer)
+    {
+      txint_timeout_cnt = 0;
     }
 }
 
@@ -3196,13 +3208,14 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
 {
   size_t len = 0;
   irqstate_t flags;
-  const clock_t timeout = MSEC2TICK(10);
+  const clock_t timeout = MSEC2TICK(2);
+  static uint32_t cdcwrite_timeout_cnt = 0;
   clock_t start;
   FAR struct cdcacm_dev_s *priv = NULL;
   static int sending_state = 0; // used to avoid being called repeatedly
 
   start = clock_systime_ticks();
-  while (len < buflen && ((clock_systime_ticks() - start) < timeout))
+  do
     {
       flags = enter_critical_section();
       priv = g_syslog_cdcacm;
@@ -3221,6 +3234,7 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
 
       if (cdcuart_txready(&priv->serdev))
         {
+          cdcwrite_timeout_cnt = 0;
           ssize_t ret = cdcuart_sendbuf(&priv->serdev,
                                         buffer + len,
                                         buflen - len);
@@ -3235,7 +3249,19 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
 
       sending_state = 0;
       leave_critical_section(flags);
+
+      if (cdcwrite_timeout_cnt > CDC_TX_TIMEOUT_MAX)
+        {
+          break;
+        }
+
+      if (clock_systime_ticks() - start > timeout)
+        {
+          cdcwrite_timeout_cnt ++;
+          break;
+        }
     }
+  while (len < buflen);
 
   return buflen;
 }

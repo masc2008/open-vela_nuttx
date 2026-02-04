@@ -1456,8 +1456,12 @@ static int rndis_send_encapsulated_response(FAR struct rndis_dev_s *priv,
                                             size_t size)
 {
   size_t size_words = size / sizeof(uint32_t);
-  FAR struct rndis_notification *notif =
-    (FAR struct rndis_notification *)priv->epintin_req->buf;
+  FAR struct rndis_notification *notif;
+
+  if (priv == NULL || priv->epintin_req == NULL)
+    return -EINVAL;
+
+  notif = (FAR struct rndis_notification *)priv->epintin_req->buf;
 
   /* RNDIS packets should always be multiple of 4 bytes in size */
 

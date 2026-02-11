@@ -365,6 +365,14 @@ static ssize_t cdcuart_sendbuf(FAR struct uart_dev_s *dev,
   size_t nbytes;
   int ret;
 
+  if (!(priv->ctrlline & 1))
+    {
+      dev->xmit.head = 0;
+      dev->xmit.tail = 0;
+      uart_datasent(dev);
+      return -ENXIO;
+    }
+
   /* Get the maximum number of bytes that will fit into one bulk IN request */
 
   reqlen = MIN(CONFIG_CDCACM_BULKIN_REQLEN, ep->maxpacket);
@@ -432,6 +440,14 @@ static int cdcacm_sndpacket(FAR struct cdcacm_dev_s *priv)
       return -EINVAL;
     }
 #endif
+
+  if (!(priv->ctrlline & 1))
+    {
+      dev->xmit.head = 0;
+      dev->xmit.tail = 0;
+      uart_datasent(dev);
+      return -ENXIO;
+    }
 
   if (priv->ispolling)
     {
@@ -582,6 +598,14 @@ static int cdcacm_requeue_rdrequest(FAR struct cdcacm_dev_s *priv,
   FAR struct usbdev_ep_s *ep;
   int ret;
 
+  if (!(priv->ctrlline & 1))
+    {
+      FAR struct uart_dev_s *dev = &priv->serdev;
+      dev->xmit.head = 0;
+      dev->xmit.tail = 0;
+      uart_datasent(dev);
+      return -ENXIO;
+    }
   DEBUGASSERT(priv != NULL && rdcontainer != NULL);
   rdcontainer->offset = 0;
 
@@ -743,6 +767,15 @@ static int cdcacm_serialstate(FAR struct cdcacm_dev_s *priv)
       return -EINVAL;
     }
 #endif
+
+  if (!(priv->ctrlline & 1))
+    {
+      FAR struct uart_dev_s *dev = &priv->serdev;
+      dev->xmit.head = 0;
+      dev->xmit.tail = 0;
+      uart_datasent(dev);
+      return -ENXIO;
+    }
 
   usbtrace(CDCACM_CLASSAPI_FLOWCONTROL, (uint16_t)priv->serialstate);
 
@@ -1572,6 +1605,26 @@ static void cdcacm_unbind(FAR struct usbdevclass_driver_s *driver,
     }
 }
 
+static int cdcacm_stop_reqs(FAR struct cdcacm_dev_s *priv)
+{
+  FAR struct uart_dev_s *dev = &priv->serdev;
+
+  dev->xmit.head = 0;
+  dev->xmit.tail = 0;
+  uart_datasent(dev);
+#ifdef CONFIG_CDCACM_HAVE_EPINTIN
+  EP_CANCEL(priv->epintin, NULL);
+#endif
+  EP_CANCEL(priv->epbulkin, NULL);
+  EP_CANCEL(priv->epbulkout, NULL);
+
+  return 0;
+}
+
+static int cdcacm_start_reqs(FAR struct cdcacm_dev_s *priv)
+{
+  return 0;
+}
 /****************************************************************************
  * Name: cdcacm_setup
  *
@@ -1881,8 +1934,29 @@ static int cdcacm_setup(FAR struct usbdevclass_driver_s *driver,
                  * structure. Only bits 0 and 1 have meaning.  Respond with
                  * a zero length packet.
                  */
+                int action = 0;
+                /* ttlog use ctrlline = 3 when start reading;
+                 * sscom just set ctrlline = 1, when start reading;
+                 * so, we just check bit0
+                 */
+                if ((priv->ctrlline & 1) && ((value & 1) != 1))
+                  {
+                    action = 1; //stop reading
+                  }
+                if (!(priv->ctrlline & 1) && ((value & 1) == 1))
+                  {
+                    action = 2; //start reading
+                  }
 
                 priv->ctrlline = value & 3;
+                if (action == 1)
+                  {
+                    cdcacm_stop_reqs(priv);
+                  }
+                if (action == 2)
+                  {
+                    cdcacm_start_reqs(priv);
+                  }
                 ret = 0;
 
                 /* If there is a registered callback to receive control line

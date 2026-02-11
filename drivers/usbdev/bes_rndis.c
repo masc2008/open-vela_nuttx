@@ -2177,6 +2177,7 @@ static int usbclass_bind(FAR struct usbdevclass_driver_s *driver,
   int i;
 
   usbtrace(TRACE_CLASSBIND, 0);
+  syslog(LOG_INFO, "rndis: usbclass bind\n");
 
   /* Bind the structures */
 
@@ -2416,6 +2417,7 @@ static void usbclass_unbind(FAR struct usbdevclass_driver_s *driver,
   irqstate_t flags;
 
   usbtrace(TRACE_CLASSUNBIND, 0);
+  syslog(LOG_INFO, "rndis: usbclass unbind\n");
 
 #ifdef CONFIG_DEBUG_FEATURES
   if (!driver || !dev || !dev->ep0)
@@ -2846,6 +2848,9 @@ static void usbclass_resetconfig(FAR struct rndis_dev_s *priv)
       EP_DISABLE(priv->epintin);
       EP_DISABLE(priv->epbulkin);
       EP_DISABLE(priv->epbulkout);
+      rndis_cancel_rdreq(priv);
+      EP_CANCEL(priv->epintin, NULL);
+      EP_CANCEL(priv->epbulkin, NULL);
     }
 }
 
@@ -3040,6 +3045,7 @@ static int usbclass_classobject(int minor,
 
   strlcpy(priv->netdev.d_ifname, "rndis", IFNAMSIZ);
   ret = netdev_register(&priv->netdev, NET_LL_ETHERNET);
+  syslog(LOG_INFO, "rndis: net registered, %d\n", ret);
   if (ret)
     {
       nerr("Failed to register net device");
@@ -3091,6 +3097,7 @@ static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
     }
   netdev_iob_release(&drvr->dev->netdev);
   netdev_unregister(&drvr->dev->netdev);
+  syslog(LOG_INFO, "rndis: net unregistered\n");
   kmm_free(alloc);
 }
 

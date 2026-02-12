@@ -228,9 +228,17 @@ struct rndis_oid_value_s
 
 typedef void (*intf_state_update_cb_t)(char *name, bool up);
 
-extern void RIL_RegisterInterfaceStateUpdate(intf_state_update_cb_t cb);
+void RIL_RegisterInterfaceStateUpdate(intf_state_update_cb_t cb);
 
-extern bool RIL_InterfaceGetState(char *name);
+bool RIL_InterfaceGetState(char *name);
+
+int ipforward_enable(FAR struct net_driver_s *dev);
+
+int ipforward_disable(FAR struct net_driver_s *dev);
+
+int nat_enable(FAR struct net_driver_s *dev);
+
+int nat_disable(FAR struct net_driver_s *dev);
 
 /****************************************************************************
  * Private Function Prototypes
@@ -616,7 +624,7 @@ static int rndis_submit_rdreq(FAR struct rndis_dev_s *priv)
   irqstate_t flags = enter_critical_section();
   int ret = OK;
 
-  if (!priv->rdreq_submitted && !priv->rx_blocked)
+  if (!priv->rdreq_submitted && !priv->rx_blocked && priv->epbulkout)
     {
       priv->rdreq->len = priv->epbulkout->maxpacket;
       ret = EP_SUBMIT(priv->epbulkout, priv->rdreq);
@@ -1054,6 +1062,19 @@ static void rndis_rxdispatch(FAR void *arg)
   irqstate_t flags;
   struct net_driver_s *dev = &priv->netdev;
 
+  if (!priv->connected)
+    {
+      if (priv->rx_req)
+        {
+          flags = enter_critical_section();
+          rndis_freewrreq(priv, priv->rx_req);
+          priv->rx_req = NULL;
+          leave_critical_section(flags);
+        }
+
+      return;
+    }
+
   net_lock();
 
   flags = enter_critical_section();
@@ -1119,6 +1140,8 @@ static void rndis_rxdispatch(FAR void *arg)
       nerr("ERROR: Unsupported packet type dropped (%02x)\n",
            HTONS(hdr->type));
       NETDEV_RXDROPPED(&priv->netdev);
+
+      netdev_iob_release(&priv->netdev);
       priv->netdev.d_len = 0;
     }
 
@@ -1152,11 +1175,6 @@ static int rndis_txpoll(FAR struct net_driver_s *dev)
 {
   FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)dev->d_private;
 
-  if (!priv->connected)
-    {
-      return -EBUSY;
-    }
-
   return rndis_transmit(priv);
 }
 
@@ -1171,6 +1189,12 @@ static int rndis_txpoll(FAR struct net_driver_s *dev)
 static int rndis_transmit(FAR struct rndis_dev_s *priv)
 {
   int ret = OK;
+
+  if (!priv->connected)
+    {
+      netdev_iob_release(&priv->netdev);
+      return OK;
+    }
 
   /* Queue the packet */
 
@@ -1287,6 +1311,11 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
 
   if (!priv->connected)
     {
+      irqstate_t flags;
+      flags = enter_critical_section();
+      rndis_freewrreq(priv, priv->rx_req);
+      priv->rx_req = NULL;
+      leave_critical_section(flags);
       return -EBUSY;
     }
 
@@ -2412,6 +2441,13 @@ static void usbclass_unbind(FAR struct usbdevclass_driver_s *driver,
 
   if (priv != NULL)
     {
+      g_rndis_netdev = NULL;
+
+      priv->connected = false;
+
+      ipforward_disable(&priv->netdev);
+      netdev_carrier_off(&priv->netdev);
+
       /* Make sure that the endpoints have been unconfigured.  If
        * we were terminated gracefully, then the configuration should
        * already have been reset.  If not, then calling usbclass_resetconfig
@@ -2421,6 +2457,9 @@ static void usbclass_unbind(FAR struct usbdevclass_driver_s *driver,
 
       usbclass_resetconfig(priv);
       up_mdelay(50);
+
+      work_cancel_sync(ETHWORK, &priv->rxwork);
+      work_cancel_sync(ETHWORK, &priv->pollwork);
 
       /* Free the pre-allocated control request */
 
@@ -3028,11 +3067,11 @@ static int usbclass_classobject(int minor,
 static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
 {
   FAR struct rndis_driver_s *drvr = (FAR struct rndis_driver_s *)classdev;
+  FAR struct rndis_dev_s *priv = drvr->dev;
   FAR struct rndis_alloc_s *alloc = (FAR struct rndis_alloc_s *)drvr->dev;
 
-  g_rndis_netdev = NULL;
-
   rndis_router_teardown(&drvr->dev->netdev);
+
   if (g_media_netdev)
     {
       nat_disable(g_media_netdev);
@@ -3042,6 +3081,15 @@ static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
     {
       _err("should not happen, no media_netdev: %d\n", __LINE__);
     }
+
+  if (priv->rx_req)
+    {
+      if (priv->rx_req->iob)
+        {
+          iob_free_chain(priv->rx_req->iob);
+        }
+    }
+  netdev_iob_release(&drvr->dev->netdev);
   netdev_unregister(&drvr->dev->netdev);
   kmm_free(alloc);
 }

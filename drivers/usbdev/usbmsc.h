@@ -491,11 +491,10 @@ struct usbmsc_dev_s
 
   /* Async write worker kernel thread interface */
 #ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
-  pid_t             wrthpid;             /* The worker thread task ID */
+  pid_t             wrthpid;            /* The worker thread task ID */
   sem_t             wrthsynch;          /* Used to synchronizer terminal events */
-  mutex_t           wrthlock;              /*  */
-  mqd_t             wrmsgq;              /* Message queue */
-  sem_t             wrthwaitsem;         /* Used to signal worker thread */
+  mutex_t           wrthlock;           /* Used to get exclusive access to the state data */
+  sem_t             wrthwaitsem;        /* Used to signal worker thread */
   volatile uint8_t  wrthstate;          /* State of the worker thread */
   volatile uint16_t wrtheventset;       /* Set of pending events signaled to worker thread */
   uint8_t           *cache_buffer;

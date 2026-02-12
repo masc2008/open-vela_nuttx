@@ -54,6 +54,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
+#include <fcntl.h>
 
 #include <nuttx/irq.h>
 #include <nuttx/kthread.h>
@@ -3186,12 +3187,12 @@ void usbmsc_scsi_signal(FAR struct usbmsc_dev_s *priv)
  *   Get write message queue status
  *
  ****************************************************************************/
-static int usbmsc_cache_status(FAR struct usbmsc_dev_s *priv)
+static int usbmsc_cache_status(mqd_t wrmsgq)
 {
   struct mq_attr attr;
   int ret;
 
-  ret = mq_getattr(priv->wrmsgq,&attr);
+  ret = mq_getattr(wrmsgq, &attr);
   if(ret < 0)
   {
     DEBUGASSERT(!ret);
@@ -3210,6 +3211,7 @@ static int usbmsc_cache_write(FAR struct usbmsc_dev_s *priv, uint8_t *buffer, ui
 {
   FAR struct usbmsc_lun_s *lun = priv->lun;
   struct usbmsc_wrmsg_s msg = {0};
+  mqd_t wrmsgq;
   int ret;
 
   msg.buffer = buffer;
@@ -3218,7 +3220,13 @@ static int usbmsc_cache_write(FAR struct usbmsc_dev_s *priv, uint8_t *buffer, ui
   msg.sectorsize = lun->sectorsize;
   msg.lun = lun;
 
-  if (usbmsc_cache_status(priv) == USBMSC_WRITEMSGQUEUE_EMPTY)
+  wrmsgq = mq_open(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME, O_WRONLY);
+  if (wrmsgq == (mqd_t)-1)
+    {
+        uerr("wrmsgq open fail\n");
+        goto error_out;
+    }
+  if (usbmsc_cache_status(wrmsgq) == USBMSC_WRITEMSGQUEUE_EMPTY)
     {
       ret = nxsem_wait(&priv->wrthwaitsem);
       if(ret < 0)
@@ -3228,8 +3236,9 @@ static int usbmsc_cache_write(FAR struct usbmsc_dev_s *priv, uint8_t *buffer, ui
           goto error_out;
         }
     }
-  ret = mq_send(priv->wrmsgq, (const char *)&msg, sizeof(struct usbmsc_wrmsg_s), CONFIG_USBMSC_SCSI_PRIO);
+  ret = mq_send(wrmsgq, (const char *)&msg, sizeof(struct usbmsc_wrmsg_s), CONFIG_USBMSC_SCSI_PRIO);
 error_out:
+  mq_close(wrmsgq);
   return ret;
 }
 
@@ -3314,6 +3323,7 @@ int usbmsc_cache_main(int argc, char *argv[])
 {
   FAR struct usbmsc_dev_s *priv;
   struct usbmsc_wrmsg_s msg;
+  mqd_t wrmsgq;
   uint16_t threadstate;
   ssize_t nbytes;
   unsigned int prio;
@@ -3322,6 +3332,12 @@ int usbmsc_cache_main(int argc, char *argv[])
   priv = g_usbmsc_handoff;
   DEBUGASSERT(priv);
   g_usbmsc_handoff = NULL;
+  wrmsgq = mq_open(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME, O_RDONLY);
+  if (wrmsgq == (mqd_t)-1)
+    {
+        uerr("wrmsgq open fail\n");
+        goto error_out;
+    }
 
   /* wait initialize done */
   ret = nxmutex_lock(&priv->wrthlock);
@@ -3343,13 +3359,16 @@ int usbmsc_cache_main(int argc, char *argv[])
   while (threadstate == USBMSC_WRSTATE_STARTED)
     {
       /* flash data to emmc */
-      nbytes = mq_receive(priv->wrmsgq, (FAR char *)&msg, sizeof(struct usbmsc_wrmsg_s), &prio);
+      nbytes = mq_receive(wrmsgq, (FAR char *)&msg, sizeof(struct usbmsc_wrmsg_s), &prio);
       if (nbytes != sizeof(struct usbmsc_wrmsg_s))
         {
           uerr("receive fail\n");
           usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_CMDWRITEWRITEFAIL), -nbytes);
-          msg.lun->sd     = SCSI_KCQME_WRITEFAULTAUTOREALLOCFAILED;
-          msg.lun->sdinfo = msg.sector;
+          if(msg.lun != NULL)
+            {
+              msg.lun->sd     = SCSI_KCQME_WRITEFAULTAUTOREALLOCFAILED;
+              msg.lun->sdinfo = msg.sector;
+            }
           continue;
         }
       /* usbmsc_uninitialize send msg for notify cache worker exit */
@@ -3366,7 +3385,7 @@ int usbmsc_cache_main(int argc, char *argv[])
         }
       kmm_free(msg.buffer);
 
-      if(usbmsc_cache_status(priv) == USBMSC_WRITEMSGQUEUE_EMPTY)
+      if(usbmsc_cache_status(wrmsgq) == USBMSC_WRITEMSGQUEUE_EMPTY)
         {
           nxsem_post(&priv->wrthwaitsem);
         }
@@ -3376,7 +3395,7 @@ int usbmsc_cache_main(int argc, char *argv[])
   priv->wrthstate = USBMSC_WRSTATE_TERMINATED;
 
 error_out:
-  mq_close(priv->wrmsgq);
+  mq_close(wrmsgq);
   nxsem_post(&priv->wrthsynch);
   return EXIT_SUCCESS;
 }

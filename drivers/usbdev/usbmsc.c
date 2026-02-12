@@ -1321,17 +1321,19 @@ int usbmsc_configure(unsigned int nluns, FAR void **handle)
   nxsem_init(&priv->wrthwaitsem, 0, 1);
 
   struct mq_attr attr;
+  mqd_t  wrmsgq;
   attr.mq_maxmsg  = CONFIG_USBMSC_WRITE_CACHE_QUEUE_SIZE;
   attr.mq_msgsize = sizeof(struct usbmsc_wrmsg_s);
   attr.mq_curmsgs = 0;
   attr.mq_flags = 0;
 
-  priv->wrmsgq = mq_open(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME, O_CREAT | O_RDWR, 0644, &attr);
-  if (priv->wrmsgq == (mqd_t)-1)
+  wrmsgq = mq_open(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME, O_CREAT | O_RDWR, 0644, &attr);
+  if (wrmsgq == (mqd_t)-1)
     {
       ret =  -errno;
       goto errout;
     }
+  mq_close(wrmsgq);
 #endif
   sq_init(&priv->wrreqlist);
   priv->nluns = nluns;
@@ -1888,7 +1890,7 @@ void usbmsc_uninitialize(FAR void *handle)
 
           msg.exitflag = 1;
 
-          wrmsgq = mq_open(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME, O_RDWR, 0644, NULL);
+          wrmsgq = mq_open(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME, O_WRONLY);
           do
             {
               ret = mq_send(wrmsgq, (const char *)&msg, sizeof(struct usbmsc_wrmsg_s), CONFIG_USBMSC_SCSI_PRIO - 1);

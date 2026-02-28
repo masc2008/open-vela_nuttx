@@ -95,7 +95,7 @@
 #define IFF_IS_RUNNING(f)     (((f) & IFF_RUNNING) != 0)
 #define IFF_IS_NOARP(f)       (((f) & IFF_NOARP) != 0)
 #define IFF_IS_NAT(f)         (((f) & IFF_NAT) != 0)
-#define IFF_IS_FORWARD(f)     (((f) & IFF_FORWARD) != 0)
+#define IFF_IS_FORWARD(f)     (IFF_IS_NAT(f) || ((f) & IFF_FORWARD) != 0)
 #define IFF_IS_LOOPBACK(f)    (((f) & IFF_LOOPBACK) != 0)
 #define IFF_IS_POINTOPOINT(f) (((f) & IFF_POINTOPOINT) != 0)
 #define IFF_IS_MULTICAST(f)   (((f) & IFF_MULTICAST) != 0)

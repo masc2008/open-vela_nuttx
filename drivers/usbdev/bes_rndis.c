@@ -62,8 +62,6 @@
 #  include <nuttx/usb/composite.h>
 #endif
 
-#include "bes_rndis_router.h"
-
 /****************************************************************************
  * Pre-processor definitions
  ****************************************************************************/
@@ -91,10 +89,6 @@
 static_assert(CONFIG_NET_LL_GUARDSIZE >= RNDIS_PACKET_HDR_SIZE + ETH_HDRLEN,
              "CONFIG_NET_LL_GUARDSIZE cannot be less than ETH_HDRLEN"
              " + RNDIS_PACKET_HDR_SIZE");
-
-static_assert((CONFIG_NET_LL_GUARDSIZE % 4) == 2,
-             "CONFIG_NET_LL_GUARDSIZE - ETH_HDRLEN "
-             "should be aligned to 4 bytes");
 
 #define RNDIS_NCONFIGS          (1)
 #define RNDIS_CONFIGID          (1)
@@ -163,6 +157,7 @@ struct rndis_dev_s
 
   struct work_s rxwork;                  /* Worker for dispatching RX packets */
   struct work_s pollwork;                /* TX poll worker */
+  struct work_s carrier_work;            /* link status change notify worker */
 
   uint8_t config;                        /* USB Configuration number */
   FAR struct rndis_req_s *net_req;       /* Pointer to request whose buffer is assigned to network */
@@ -174,6 +169,9 @@ struct rndis_dev_s
   bool rdreq_submitted;                  /* Indicates if the read request is submitted */
   bool rx_blocked;                       /* Indicates if we can receive packets on bulk in endpoint */
   bool connected;                        /* Connection status indicator */
+
+  /* if report rndis link status too early, PC RNDIS net will init error */
+  bool blockintr_ep;                     /* whether can report link status */
   uint32_t rndis_packet_filter;          /* RNDIS packet filter value */
   uint32_t rndis_host_tx_count;          /* TX packet counter */
   uint32_t rndis_host_rx_count;          /* RX packet counter */
@@ -181,7 +179,9 @@ struct rndis_dev_s
 
   size_t response_queue_words;           /* Count of words waiting in response_queue. */
   uint32_t response_queue[RNDIS_RESP_QUEUE_WORDS];
-  enum rndis_mode mode;                  /* Rndis mode */
+  uint32_t reqs_used;                   /* used reqs */
+  uint32_t reqs_freed;                  /* freed reqs, for checking rndis status */
+  struct iob_s *iob_to_free;
 };
 
 /* The internal version of the class driver */
@@ -239,6 +239,11 @@ int ipforward_disable(FAR struct net_driver_s *dev);
 int nat_enable(FAR struct net_driver_s *dev);
 
 int nat_disable(FAR struct net_driver_s *dev);
+
+#if defined(CONFIG_BES_MODEM)
+void rndis_router_setup(const char *devname);
+void rndis_router_teardown(void);
+#endif
 
 /****************************************************************************
  * Private Function Prototypes
@@ -604,6 +609,36 @@ static bool pc_rndis_up = true;
  *
  ****************************************************************************/
 
+static void rndis_defer_iob_free(FAR struct rndis_dev_s *priv,
+                                 FAR struct iob_s *iob)
+{
+  if (!priv->iob_to_free)
+    {
+      priv->iob_to_free = iob;
+    }
+  else
+    {
+      iob_concat(priv->iob_to_free, iob);
+    }
+}
+
+static void rndis_do_iob_free(FAR struct rndis_dev_s *priv)
+{
+  if (!priv->iob_to_free)
+    {
+      return;
+    }
+
+  FAR struct iob_s * iob;
+
+  irqstate_t flags = enter_critical_section();
+  iob = priv->iob_to_free;
+  priv->iob_to_free = NULL;
+  leave_critical_section(flags);
+
+  iob_free_chain(iob);
+}
+
 /****************************************************************************
  * Name: rndis_submit_rdreq
  *
@@ -725,6 +760,7 @@ static void rndis_unblock_rx(FAR struct rndis_dev_s *priv)
 
 static FAR struct rndis_req_s *rndis_allocwrreq(FAR struct rndis_dev_s *priv)
 {
+  priv->reqs_used++;
   return (FAR struct rndis_req_s *)sq_remfirst(&priv->reqlist);
 }
 
@@ -768,15 +804,37 @@ static bool rndis_hasfreereqs(FAR struct rndis_dev_s *priv)
 static void rndis_freewrreq(FAR struct rndis_dev_s *priv,
                             FAR struct rndis_req_s *req)
 {
+  int defer = 0;
+
   DEBUGASSERT(req != NULL);
   if (req->iob)
     {
       /* In ep submit case, need release iob chain when write complete */
 
-      iob_free_chain(req->iob);
+#if defined(CONFIG_BES_MODEM)
+      /* FIXME, iob from cell-net can be freed,
+       * How to check that it if wlan0 was set from application layer?
+       */
+      defer = 0;
+#else
+      /* iob from wlan can't be freed in interrupt context
+       * other cases: free it timely
+       */
+      defer = up_interrupt_context();
+#endif
+      if (defer)
+        {
+          rndis_defer_iob_free(priv, req->iob);
+        }
+      else
+        {
+          iob_free_chain(req->iob);
+        }
+
       req->iob = NULL;
     }
 
+  priv->reqs_freed++;
   sq_addlast((FAR sq_entry_t *)req, &priv->reqlist);
   rndis_submit_rdreq(priv);
 }
@@ -887,8 +945,8 @@ static void rndis_iob2buf(FAR struct rndis_dev_s *priv,
                           FAR struct rndis_req_s *req)
 {
   uint16_t llhdrlen = NET_LL_HDRLEN(&priv->netdev);
-  uint32_t offset   = CONFIG_NET_LL_GUARDSIZE - llhdrlen -
-                      RNDIS_PACKET_HDR_SIZE;
+  struct iob_s *iob;
+  FAR uint8_t *hdr;
 
   /*  ----------------------------------------------------------------
    *  |<--- CONFIG_NET_LL_GUARDSIZE ---->|<-- io_len/io_pktlen(0) -->|
@@ -899,9 +957,14 @@ static void rndis_iob2buf(FAR struct rndis_dev_s *priv,
    *  ---------------------------------------------------------------|
    */
 
+  iob = req->iob;
   if (req->iob->io_flink == NULL)
     {
-      req->req->buf = &req->iob->io_data[offset];
+      DEBUGASSERT((iob->io_offset & 0x1) == 0);
+      /* bes patch:  io_data has "enough" space for the rndis hdr*/
+      hdr = &iob->io_data[iob->io_offset];
+      hdr -= (llhdrlen + RNDIS_PACKET_HDR_SIZE);
+      req->req->buf = hdr; //XXX: not aligned to 4bytes yet!!!
       req->req->len = CONFIG_RNDIS_BULKIN_REQLEN;
     }
   else
@@ -1016,6 +1079,8 @@ static uint16_t rndis_fillrequest(FAR struct rndis_dev_s *priv,
                                   FAR struct rndis_req_s *req)
 {
   size_t datalen;
+  struct iob_s *iob;
+  int pads = 0;
 
   req->req->len = 0;
 
@@ -1026,19 +1091,29 @@ static uint16_t rndis_fillrequest(FAR struct rndis_dev_s *priv,
       /* Move iob from netdev to net_req and send the required headers */
 
       req->iob = priv->netdev.d_iob;
+      iob = req->iob;
       netdev_iob_clear(&priv->netdev);
       rndis_iob2buf(priv, req);
-      FAR struct rndis_packet_msg *msg =
-        (FAR struct rndis_packet_msg *)req->req->buf;
-      memset(msg, 0, RNDIS_PACKET_HDR_SIZE);
+      FAR struct rndis_packet_msg *msg;
+      msg = (FAR struct rndis_packet_msg *)req->req->buf;
+      if (((int)msg & 0x3) != 0) {
+        ninfo("%s:%d, msg 0x%p, iob 0x%p, %d\n",
+             __func__, __LINE__, msg,
+             iob->io_data, iob->io_offset);
+        msg = (struct rndis_packet_msg *)((char *)msg - 2);
+        pads = 2;
+        req->req->buf = (FAR uint8_t *)msg;
+      }
+      DEBUGASSERT(((int)msg & 0x3) == 0);
 
+      memset(msg, 0, RNDIS_PACKET_HDR_SIZE + pads);
       msg->msgtype    = RNDIS_PACKET_MSG;
-      msg->msglen     = RNDIS_PACKET_HDR_SIZE + datalen;
-      msg->dataoffset = RNDIS_PACKET_HDR_SIZE - 8;
+      msg->msglen     = RNDIS_PACKET_HDR_SIZE + datalen + pads;
+      msg->dataoffset = RNDIS_PACKET_HDR_SIZE - 8 + pads;
       msg->datalen    = datalen;
 
       req->req->flags = USBDEV_REQFLAGS_NULLPKT;
-      req->req->len   = datalen + RNDIS_PACKET_HDR_SIZE;
+      req->req->len   = datalen + RNDIS_PACKET_HDR_SIZE + pads;
     }
 
   return req->req->len;
@@ -1062,6 +1137,8 @@ static void rndis_rxdispatch(FAR void *arg)
   irqstate_t flags;
   struct net_driver_s *dev = &priv->netdev;
 
+  rndis_do_iob_free(priv);
+
   if (!priv->connected)
     {
       if (priv->rx_req)
@@ -1083,7 +1160,6 @@ static void rndis_rxdispatch(FAR void *arg)
   leave_critical_section(flags);
 
   hdr = (FAR struct eth_hdr_s *)NETLLBUF;
-
   /* We only accept IP packets of the configured type and ARP packets */
 
 #ifdef CONFIG_NET_IPv4
@@ -1209,6 +1285,23 @@ static int rndis_transmit(FAR struct rndis_dev_s *priv)
   return ret;
 }
 
+static void rndis_carrier_work(FAR void *arg)
+{
+  FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)arg;
+  struct net_driver_s *dev = &priv->netdev;
+
+  ninfo("%d, %d, %d\n",
+        __LINE__, g_media_ready, priv->blockintr_ep);
+  if (g_media_ready)
+    {
+      netdev_carrier_on(dev);
+    }
+  else
+    {
+      netdev_carrier_off(dev);
+    }
+  bes_rndis_state_update();
+}
 /****************************************************************************
  * Name: rndis_ifup
  *
@@ -1219,10 +1312,20 @@ static int rndis_transmit(FAR struct rndis_dev_s *priv)
 
 static int rndis_ifup(FAR struct net_driver_s *dev)
 {
-  if (dev && !IFF_IS_RUNNING(dev->d_flags))
+  FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)dev->d_private;
+
+  g_media_ready = 1;
+  if (!up_interrupt_context())
     {
-      if (g_media_ready == true)
-        dev->d_flags |= IFF_RUNNING;
+      netdev_carrier_on(dev);
+      bes_rndis_state_update();
+    }
+  else
+    {
+      if (work_available(&priv->carrier_work))
+        {
+          work_queue(ETHWORK, &priv->carrier_work, rndis_carrier_work, priv, 0);
+        }
     }
 
   return OK;
@@ -1238,6 +1341,22 @@ static int rndis_ifup(FAR struct net_driver_s *dev)
 
 static int rndis_ifdown(FAR struct net_driver_s *dev)
 {
+  FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)dev->d_private;
+
+  g_media_ready = 0;
+  if (!up_interrupt_context())
+    {
+      netdev_carrier_off(dev);
+      bes_rndis_state_update();
+    }
+  else
+    {
+      if (work_available(&priv->carrier_work))
+        {
+          work_queue(ETHWORK, &priv->carrier_work, rndis_carrier_work, priv, 0);
+        }
+    }
+
   return OK;
 }
 
@@ -1252,6 +1371,8 @@ static int rndis_ifdown(FAR struct net_driver_s *dev)
 static void rndis_txavail_work(FAR void *arg)
 {
   FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)arg;
+
+  rndis_do_iob_free(priv);
 
   net_lock();
 
@@ -1282,7 +1403,7 @@ static int rndis_txavail(FAR struct net_driver_s *dev)
 {
   FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)dev->d_private;
 
-  if (work_available(&priv->pollwork))
+  if (work_available(&priv->pollwork) && (priv->connected))
     {
       work_queue(ETHWORK, &priv->pollwork, rndis_txavail_work, priv, 0);
     }
@@ -1709,6 +1830,7 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
             }
 
           rndis_send_encapsulated_response(priv, respsize);
+          priv->blockintr_ep = 0;
         }
         break;
 
@@ -1727,6 +1849,22 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
 
           resp->addreset  = 0;
           priv->connected = false;
+          syslog(0, "%s, %d, tmp log: RNDIS_RESET_MSG\n",
+                 __func__, __LINE__);
+#if 0
+          //enable this after more test
+          //priv->connected = true;
+          rndis_cancel_rdreq(priv);
+          EP_CANCEL(priv->epintin, NULL);
+          EP_CANCEL(priv->epbulkin, NULL);
+          if (rndis_hasfreereqs(priv))
+          {
+            rndis_txavail(&priv->netdev);
+            syslog(0, "%s, %d, RNDIS_RESET_MSG\n",
+                   __func__, __LINE__);
+          }
+          int ret = rndis_submit_rdreq(priv);
+#endif
           rndis_send_encapsulated_response(priv, respsize);
         }
         break;
@@ -2446,6 +2584,7 @@ static void usbclass_unbind(FAR struct usbdevclass_driver_s *driver,
       g_rndis_netdev = NULL;
 
       priv->connected = false;
+      rndis_do_iob_free(priv);
 
       ipforward_disable(&priv->netdev);
       netdev_carrier_off(&priv->netdev);
@@ -2462,6 +2601,7 @@ static void usbclass_unbind(FAR struct usbdevclass_driver_s *driver,
 
       work_cancel_sync(ETHWORK, &priv->rxwork);
       work_cancel_sync(ETHWORK, &priv->pollwork);
+      work_cancel_sync(ETHWORK, &priv->carrier_work);
 
       /* Free the pre-allocated control request */
 
@@ -3044,6 +3184,8 @@ static int usbclass_classobject(int minor,
   drvr->dev                = priv;
 
   strlcpy(priv->netdev.d_ifname, "rndis", IFNAMSIZ);
+
+  priv->blockintr_ep = 1;
   ret = netdev_register(&priv->netdev, NET_LL_ETHERNET);
   syslog(LOG_INFO, "rndis: net registered, %d\n", ret);
   if (ret)
@@ -3057,14 +3199,13 @@ static int usbclass_classobject(int minor,
           nat_enable(g_media_netdev);
           ipforward_enable(g_media_netdev);
         }
-      else
-        {
-          _err("should not happen, no media_netdev: %d\n", __LINE__);
-        }
 
       ipforward_enable(&priv->netdev);
       g_rndis_netdev = &priv->netdev;
-      rndis_router_setup(&priv->netdev);
+
+#if defined(CONFIG_BES_MODEM)
+      rndis_router_setup(priv->netdev.d_ifname);
+#endif
     }
 
   return ret;
@@ -3076,16 +3217,14 @@ static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
   FAR struct rndis_dev_s *priv = drvr->dev;
   FAR struct rndis_alloc_s *alloc = (FAR struct rndis_alloc_s *)drvr->dev;
 
-  rndis_router_teardown(&drvr->dev->netdev);
+#if defined(CONFIG_BES_MODEM)
+  rndis_router_teardown();
+#endif
 
   if (g_media_netdev)
     {
       nat_disable(g_media_netdev);
       ipforward_disable(g_media_netdev);
-    }
-  else
-    {
-      _err("should not happen, no media_netdev: %d\n", __LINE__);
     }
 
   if (priv->rx_req)
@@ -3210,7 +3349,7 @@ rndis_prepare_indicate_status(FAR struct rndis_dev_s *priv, size_t size, uint32_
 
   if (priv->response_queue_words + size_words > RNDIS_RESP_QUEUE_WORDS)
     {
-      nerr("RNDIS response queue full, dropping command %08x\n", status);
+      nerr("RNDIS response queue full, dropping command %08" PRIu32 "\n", status);
       return NULL;
     }
 
@@ -3227,57 +3366,35 @@ static int bes_rndis_state_update(void)
 {
   struct rndis_dev_s *priv = NULL;
   FAR struct rndis_response_header *resp;
+  int status;
 
-  if (g_rndis_netdev)
+
+  if (!g_rndis_netdev)
     {
-      priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
-      size_t respsize = sizeof(struct rndis_indicate_msg);
-
-      if (g_media_ready && g_rndis_enabled)
-        {
-          usbclass_setconfig(priv, RNDIS_CONFIGID);
-
-          resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_CONNECT);
-          if (!resp)
-            return -ENOMEM;
-          rndis_send_encapsulated_response(priv, respsize);
-
-          /* bes_rndis_start */
-          if (up_interrupt_context())
-            {
-              if (g_rndis_netdev && !IFF_IS_RUNNING(g_rndis_netdev->d_flags))
-                {
-                  g_rndis_netdev->d_flags |= IFF_RUNNING;
-                }
-            }
-          else
-            {
-              netdev_carrier_on(g_rndis_netdev);
-            }
-        }
-      else
-        {
-          /* bes_rndis_stop */
-          if (up_interrupt_context())
-            {
-              if (g_rndis_netdev && IFF_IS_RUNNING(g_rndis_netdev->d_flags))
-                {
-                  g_rndis_netdev->d_flags &= ~IFF_RUNNING;
-                }
-            }
-          else
-            {
-              netdev_carrier_off(g_rndis_netdev);
-            }
-
-
-          resp = rndis_prepare_indicate_status(priv, respsize, RNDIS_STATUS_MEDIA_DISCONNECT);
-          if (!resp)
-            return -ENOMEM;
-          rndis_send_encapsulated_response(priv, respsize);
-        }
+      return -1;
     }
 
+  priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
+  if (priv->blockintr_ep)
+    {
+      return 0;
+    }
+
+  if (g_media_ready && g_rndis_enabled)
+    {
+      status = RNDIS_STATUS_MEDIA_CONNECT;
+    }
+  else
+    {
+      status = RNDIS_STATUS_MEDIA_DISCONNECT;
+    }
+
+  size_t respsize = sizeof(struct rndis_indicate_msg);
+
+  resp = rndis_prepare_indicate_status(priv, respsize, status);
+  if (!resp)
+    return -ENOMEM;
+  rndis_send_encapsulated_response(priv, respsize);
   return 0;
 }
 
@@ -3401,4 +3518,36 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev)
     g_media_ready = RIL_InterfaceGetState(CONFIG_BES_MODEM_NET_INTERFACE);
 #endif
 }
+
+/* this function is to check rndis status when it stop function
+ */
+void dump_rndis_info(void)
+{
+  struct net_driver_s *dev = g_rndis_netdev;
+  struct rndis_dev_s *priv;
+
+  if (!dev)
+    {
+      syslog(LOG_INFO, "rndis: not init yet\n");
+      return;
+    }
+
+  priv = (struct rndis_dev_s *)g_rndis_netdev->d_private;
+
+  syslog(LOG_INFO, "rndis: info enable: %d, connected: %d, %d\n",
+         g_rndis_enabled,
+         priv->connected, priv->config);
+  syslog(LOG_INFO, "rndis: blocked: %d, submitted %d, %d\n",
+         priv->rx_blocked, priv->rdreq_submitted,
+         priv->blockintr_ep);
+  syslog(LOG_INFO, "rndis net info: %d, 0x%p\n",
+         dev->d_len, dev->d_iob);
+  syslog(LOG_INFO, "rndis net info: %d, %d, %d\n",
+         priv->current_rx_datagram_size,
+         priv->current_rx_received,
+         priv->current_rx_msglen);
+  syslog(LOG_INFO, "rndis reqs: %" PRIu32 ", %" PRIu32 ", %d\n",
+           priv->reqs_used, priv->reqs_freed, sq_count(&priv->reqlist));
+}
+
 #endif

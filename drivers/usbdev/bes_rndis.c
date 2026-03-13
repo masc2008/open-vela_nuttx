@@ -1,5 +1,5 @@
 /****************************************************************************
- * drivers/usbdev/rndis.c
+ * drivers/usbdev/bes_rndis.c
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -181,6 +181,8 @@ struct rndis_dev_s
   uint32_t response_queue[RNDIS_RESP_QUEUE_WORDS];
   uint32_t reqs_used;                   /* used reqs */
   uint32_t reqs_freed;                  /* freed reqs, for checking rndis status */
+  uint32_t iob_lostcnt;                 /* for auditing: rxreq return null due to no iob */
+  uint32_t iob_totalcnt;                /* for auditing: total iob requested */
   struct iob_s *iob_to_free;
 };
 
@@ -1006,9 +1008,11 @@ static bool rndis_allocrxreq(FAR struct rndis_dev_s *priv)
 
   /* Prepare buffer to receivce data from usb driver */
 
+  priv->iob_totalcnt++;
   iob = iob_tryalloc(false);
   if (iob == NULL)
     {
+      priv->iob_lostcnt++;
       return false;
     }
 
@@ -1403,7 +1407,7 @@ static int rndis_txavail(FAR struct net_driver_s *dev)
 {
   FAR struct rndis_dev_s *priv = (FAR struct rndis_dev_s *)dev->d_private;
 
-  if (work_available(&priv->pollwork) && (priv->connected))
+  if (work_available(&priv->pollwork))
     {
       work_queue(ETHWORK, &priv->pollwork, rndis_txavail_work, priv, 0);
     }
@@ -1848,23 +1852,25 @@ static int rndis_handle_control_message(FAR struct rndis_dev_s *priv,
             }
 
           resp->addreset  = 0;
-          priv->connected = false;
-          syslog(0, "%s, %d, tmp log: RNDIS_RESET_MSG\n",
+          syslog(LOG_WARNING, "%s:%d: RNDIS_RESET_MSG received\n",
                  __func__, __LINE__);
-#if 0
-          //enable this after more test
-          //priv->connected = true;
+
+          /* by data captured from bushound, PC sends RESET_MSG
+           * without any obvious error.
+           * During 24 hours test, received detail:
+           * 3 times about 2~3 hours,
+           * 1 time  about  8 hours
+           * 2 times about 5 hours
+           */
           rndis_cancel_rdreq(priv);
           EP_CANCEL(priv->epintin, NULL);
           EP_CANCEL(priv->epbulkin, NULL);
           if (rndis_hasfreereqs(priv))
-          {
-            rndis_txavail(&priv->netdev);
-            syslog(0, "%s, %d, RNDIS_RESET_MSG\n",
-                   __func__, __LINE__);
-          }
-          int ret = rndis_submit_rdreq(priv);
-#endif
+            {
+              rndis_txavail(&priv->netdev);
+            }
+          rndis_submit_rdreq(priv);
+
           rndis_send_encapsulated_response(priv, respsize);
         }
         break;
@@ -3521,6 +3527,7 @@ void usbdev_rndis_get_composite_devdesc(struct composite_devdesc_s *dev)
 
 /* this function is to check rndis status when it stop function
  */
+
 void dump_rndis_info(void)
 {
   struct net_driver_s *dev = g_rndis_netdev;
@@ -3546,6 +3553,8 @@ void dump_rndis_info(void)
          priv->current_rx_datagram_size,
          priv->current_rx_received,
          priv->current_rx_msglen);
+  syslog(LOG_INFO, "rndis iobs: %" PRIu32 ", %" PRIu32 "\n",
+           priv->iob_lostcnt, priv->iob_totalcnt);
   syslog(LOG_INFO, "rndis reqs: %" PRIu32 ", %" PRIu32 ", %d\n",
            priv->reqs_used, priv->reqs_freed, sq_count(&priv->reqlist));
 }

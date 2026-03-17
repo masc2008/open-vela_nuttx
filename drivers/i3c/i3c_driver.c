@@ -212,6 +212,36 @@ static ssize_t i3cdrvr_write(FAR struct file *filep, FAR const char *buffer,
 }
 
 /****************************************************************************
+ * Name: i3cdrvr_obntain_dev
+ ****************************************************************************/
+
+static FAR struct i3c_dev_desc *i3cdrvr_obntain_dev(FAR struct i3c_transfer_s *transfer, FAR struct i3c_master_controller *master)
+{
+  FAR struct i3c_dev_desc *desc;
+  uint16_t manufid;
+  uint16_t partid;
+
+  DEBUGASSERT(master);
+
+  i3c_bus_normaluse_lock(&master->bus);
+  i3c_bus_for_each_i3cdev(&master->bus, desc)
+    {
+      manufid = I3C_PID_MANUF_ID(desc->info.pid);
+      partid = I3C_PID_PART_ID(desc->info.pid);
+
+      if (manufid == transfer->manufid && partid == transfer->partid)
+        {
+          i3c_bus_normaluse_unlock(&master->bus);
+          return desc;
+        }
+    }
+
+  i3c_bus_normaluse_unlock(&master->bus);
+
+  return NULL;
+}
+
+/****************************************************************************
  * Name: i3cdrvr_ioctl
  ****************************************************************************/
 
@@ -221,9 +251,6 @@ static int i3cdrvr_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct i3c_driver_s *priv;
   FAR struct i3c_transfer_s *transfer;
   FAR struct i3c_dev_desc *desc;
-  bool obtain = false;
-  uint16_t manufid;
-  uint16_t partid;
   int ret;
 
   DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
@@ -240,34 +267,21 @@ static int i3cdrvr_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
       return ret;
     }
 
-  transfer = (FAR struct i3c_transfer_s *)((uintptr_t)arg);
-  DEBUGASSERT(transfer != NULL);
-
-  i3c_bus_normaluse_lock(&priv->master->bus);
-  i3c_bus_for_each_i3cdev(&priv->master->bus, desc)
-    {
-      manufid = I3C_PID_MANUF_ID(desc->info.pid);
-      partid = I3C_PID_PART_ID(desc->info.pid);
-
-      if (manufid == transfer->manufid && partid == transfer->partid)
-        {
-          obtain = true;
-          break;
-        }
-    }
-
-  i3c_bus_normaluse_unlock(&priv->master->bus);
-  if (!obtain)
-    {
-      nxmutex_unlock(&priv->lock);
-      return -ENXIO;
-    }
-
   /* Process the IOCTL command */
 
   switch (cmd)
     {
       case I3CIOC_PRIV_XFERS:
+
+        transfer = (FAR struct i3c_transfer_s *)((uintptr_t)arg);
+        DEBUGASSERT(transfer != NULL);
+
+        desc = i3cdrvr_obntain_dev(transfer, priv->master);
+        if (desc == NULL)
+          {
+            ret =  -ENXIO;
+            break;
+          }
 
         DEBUGASSERT(transfer->xfers != NULL);
 
@@ -277,6 +291,16 @@ static int i3cdrvr_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
                                        transfer->nxfers);
         break;
       case I3CIOC_GET_DEVINFO:
+
+        transfer = (FAR struct i3c_transfer_s *)((uintptr_t)arg);
+        DEBUGASSERT(transfer != NULL);
+
+        desc = i3cdrvr_obntain_dev(transfer, priv->master);
+        if (desc == NULL)
+          {
+            ret =  -ENXIO;
+            break;
+          }
 
         DEBUGASSERT(transfer->info != NULL);
 

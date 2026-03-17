@@ -441,7 +441,7 @@ static ssize_t ramlog_addbuf(FAR struct ramlog_dev_s *priv,
 
   /* Was anything written? */
 
-  if (len > 0 && !getprimask())
+  if (len > 0 && !sched_idletask())
     {
 #ifndef CONFIG_RAMLOG_NONBLOCKING
       /* Are there threads waiting for read data? */

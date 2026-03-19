@@ -31,6 +31,13 @@ config TXTABLE_PARTITION_MAX_NUM
 	---help---
 		Include one pseudo partition named "txtable"
 
+config TXTABLE_PARTITION_SIZE
+	hex "TXTABLE partition size"
+	default 0x8000
+	---help---
+		Define the size for the TXTABLE partition.
+		IMPORTANT: This partition is counted backwards from the END of the flash !
+
 config TXTABLE_DEFAULT_PARTITION
 	int "Enable default txtable"
 	default 0

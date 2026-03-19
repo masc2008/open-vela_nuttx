@@ -42,7 +42,7 @@
 #endif
 
 #define TXTABLE_MAGIC   "TXTABLE0"
-#define TXTABLE_LENGTH  (state->erasesize + 1)
+#define TXTABLE_LENGTH  (CONFIG_TXTABLE_PARTITION_SIZE + 1)
 
 /****************************************************************************
  * Public Functions
@@ -90,9 +90,9 @@ int parse_txtable_partition(FAR struct partition_state_s *state,
   memset(part, 0, CONFIG_TXTABLE_PARTITION_MAX_NUM *
          sizeof(struct partition_s));
 
-  /* TXTABLE locate in the last erase block */
+  /* TXTABLE locate in the 32K last erase blocks */
 
-  blkpererase = state->erasesize / state->blocksize;
+  blkpererase = CONFIG_TXTABLE_PARTITION_SIZE / state->blocksize;
   lasteraseblk = state->nblocks - blkpererase;
 
   for (i = 0; i <= CONFIG_TXTABLE_DEFAULT_PARTITION; i++)
@@ -121,7 +121,7 @@ int parse_txtable_partition(FAR struct partition_state_s *state,
               continue;
             }
 
-          ret = file_read(&f, token, state->erasesize);
+          ret = file_read(&f, token, CONFIG_TXTABLE_PARTITION_SIZE);
           file_close(&f);
           if (ret < 0)
             {

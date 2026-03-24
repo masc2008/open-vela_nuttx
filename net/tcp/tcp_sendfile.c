@@ -334,8 +334,14 @@ static uint32_t sendfile_eventhandler(FAR struct net_driver_s *dev,
         }
 
       /* Check if we have "space" in the window */
-
-      if ((pstate->snd_sent - pstate->snd_acked + sndlen) < conn->snd_wnd)
+      /* The `tcp send file` implementation in NuttX is relatively simple
+       * and does not include congestion control. When NET_TCP_WINDOW_SCALE
+       * is enabled, the peer’s TCP window may become too large, causing
+       * transmission failures. Since the official implementation has not been
+       * optimized for this, a simple workaround is to limit the number of
+       * in-flight packets first.
+       */
+      if ((pstate->snd_sent - pstate->snd_acked + sndlen) < MIN(UINT16_MAX, conn->snd_wnd))
         {
           /* Then set-up to send that amount of data. (this won't actually
            * happen until the polling cycle completes).

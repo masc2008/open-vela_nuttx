@@ -89,13 +89,13 @@
 
 /* Structure type returned by the div() function. */
 
-struct div_s
+struct div_s_t
 {
   int quot;     /* Quotient */
   int rem;      /* Remainder */
 };
 
-typedef struct div_s div_t;
+typedef struct div_s_t div_t;
 
 /* Structure type returned by the ldiv() function. */
 

@@ -74,7 +74,7 @@ extern "C"
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isspace(int c)
 {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
@@ -99,7 +99,7 @@ int isspace_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isascii(int c)
 {
   return c >= 0 && c <= 0x7f;
@@ -122,7 +122,7 @@ int isascii_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isprint(int c)
 {
   return c >= 0x20 && c < 0x7f;
@@ -145,7 +145,7 @@ int isprint_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isgraph(int c)
 {
   return c > 0x20 && c < 0x7f;
@@ -168,7 +168,7 @@ int isgraph_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int iscntrl(int c)
 {
   return c < 0x20 || c == 0x7f;
@@ -191,7 +191,7 @@ int iscntrl_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int islower(int c)
 {
   return c >= 'a' && c <= 'z';
@@ -214,7 +214,7 @@ int islower_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isupper(int c)
 {
   return c >= 'A' && c <= 'Z';
@@ -237,7 +237,7 @@ int isupper_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isalpha(int c)
 {
   return islower(c) || isupper(c);
@@ -260,7 +260,7 @@ int isalpha_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isblank(int c)
 {
   return c == ' ' || c == '\t';
@@ -283,7 +283,7 @@ int isblank_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isdigit(int c)
 {
   return c >= '0' && c <= '9';
@@ -306,7 +306,7 @@ int isdigit_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isalnum(int c)
 {
   return isalpha(c) || isdigit(c);
@@ -330,7 +330,7 @@ int isalnum_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int ispunct(int c)
 {
   return isgraph(c) && !isalnum(c);
@@ -353,7 +353,7 @@ int ispunct_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int isxdigit(int c)
 {
   return (c >= '0' && c <= '9') ||
@@ -378,7 +378,7 @@ int isxdigit_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int toupper(int c)
 {
   return (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
@@ -401,7 +401,7 @@ int toupper_l(int, locale_t);
  *
  ****************************************************************************/
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(CONFIG_LIBCXXTOOLCHAIN)
 static inline int tolower(int c)
 {
   return (c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c;

@@ -1336,6 +1336,7 @@
  */
 
  #if !defined(_ASMLANGUAGE) && !defined(_NOCLANGUAGE) && !defined(__ASSEMBLER__)
+#ifndef CONFIG_LIBCXXTOOLCHAIN
 #  define _XCJOIN(a,b)                 a ## b
 #  define XCJOIN(a,b)                  _XCJOIN(a,b)
 #  ifdef XCHAL_CP0_NAME
@@ -1370,6 +1371,9 @@
      extern const unsigned char XCJOIN(Xthal_cp_id_, XCHAL_CP7_IDENT);
      extern const unsigned int XCJOIN(Xthal_cp_mask_, XCHAL_CP7_IDENT);
 #  endif
+#else
+#include <xtensa/config/core.h>
+#endif
 #endif
 
 /* Derived ******************************************************************/

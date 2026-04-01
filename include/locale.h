@@ -114,11 +114,13 @@ extern "C"
 FAR char *setlocale(int, FAR const char *);
 FAR struct lconv *localeconv(void);
 
+#ifndef CONFIG_LIBCXXTOOLCHAIN
 locale_t newlocale(int, FAR const char *, locale_t);
 locale_t duplocale(locale_t);
 void freelocale(locale_t);
 
 locale_t uselocale(locale_t);
+#endif
 
 #undef EXTERN
 #ifdef __cplusplus

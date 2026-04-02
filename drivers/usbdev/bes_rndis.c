@@ -2592,7 +2592,9 @@ static void usbclass_unbind(FAR struct usbdevclass_driver_s *driver,
       priv->connected = false;
       rndis_do_iob_free(priv);
 
+#ifdef CONFIG_NET_NAT
       ipforward_disable(&priv->netdev);
+#endif
       netdev_carrier_off(&priv->netdev);
 
       /* Make sure that the endpoints have been unconfigured.  If
@@ -3200,6 +3202,7 @@ static int usbclass_classobject(int minor,
     }
   else
     {
+#ifdef CONFIG_NET_NAT
       if (g_media_netdev)
         {
           nat_enable(g_media_netdev);
@@ -3207,6 +3210,7 @@ static int usbclass_classobject(int minor,
         }
 
       ipforward_enable(&priv->netdev);
+#endif
       g_rndis_netdev = &priv->netdev;
 
 #if defined(CONFIG_BES_MODEM)
@@ -3227,11 +3231,13 @@ static void usbclass_uninitialize(FAR struct usbdevclass_driver_s *classdev)
   rndis_router_teardown();
 #endif
 
+#ifdef CONFIG_NET_NAT
   if (g_media_netdev)
     {
       nat_disable(g_media_netdev);
       ipforward_disable(g_media_netdev);
     }
+#endif
 
   if (priv->rx_req)
     {

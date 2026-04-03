@@ -1612,11 +1612,8 @@ static int cdcacm_stop_reqs(FAR struct cdcacm_dev_s *priv)
   dev->xmit.head = 0;
   dev->xmit.tail = 0;
   uart_datasent(dev);
-#ifdef CONFIG_CDCACM_HAVE_EPINTIN
-  EP_CANCEL(priv->epintin, NULL);
-#endif
+
   EP_CANCEL(priv->epbulkin, NULL);
-  EP_CANCEL(priv->epbulkout, NULL);
 
   return 0;
 }

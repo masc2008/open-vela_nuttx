@@ -176,7 +176,12 @@ add_compile_options(
   -Wno-unknown-pragmas
   -Wno-atomic-alignment
   $<$<COMPILE_LANGUAGE:C>:-Wstrict-prototypes>
-  $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++>)
+
+if(CONFIG_LIBCXXTOOLCHAIN)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-stdlib=libc++>)
+else()
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-nostdinc++>)
+endif()
 
 if(NOT ${CONFIG_ARCH_TOOLCHAIN_CLANG})
   add_compile_options(-Wno-psabi)

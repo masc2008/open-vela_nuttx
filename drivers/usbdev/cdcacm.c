@@ -68,7 +68,7 @@
 
 #define CDCACM_RXDELAY   (CLK_TCK / 5)
 
-#define CDC_TX_TIMEOUT_MAX 20
+#define CDC_TX_TIMEOUT_MAX 40
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -374,8 +374,14 @@ static ssize_t cdcuart_sendbuf(FAR struct uart_dev_s *dev,
     }
 
   /* Get the maximum number of bytes that will fit into one bulk IN request */
-
+#ifdef CONFIG_BES_HAVE_USB
+  if (reqlen > CONFIG_CDCACM_BULKIN_REQLEN)
+    {
+      reqlen = CONFIG_CDCACM_BULKIN_REQLEN;
+    }
+#else
   reqlen = MIN(CONFIG_CDCACM_BULKIN_REQLEN, ep->maxpacket);
+#endif
 
   /* Peek at the request in the container at the head of the list */
 
@@ -1425,6 +1431,12 @@ static int cdcacm_bind(FAR struct usbdevclass_driver_s *driver,
   priv->wrcontainer = (FAR struct cdcacm_wrreq_s *)
                       sq_remfirst(&priv->txfree);
   priv->serdev.xmit.buffer = (FAR char *)priv->wrcontainer->req->buf;
+  /* reqlen+1: Emulate circular buffer "one byte reserved" design at serival uart_putxmitchar
+   * Since xmit.tail is always 0 in CDCACM driver, this design:
+   * 1. Fully utilizes all reqlen bytes of buffer space
+   * 2. Prevents buffer overflow
+   * 3. Maintains consistency with available space calculation in FIONSPACE etc.
+   */
   priv->serdev.xmit.size   = reqlen + 1;
   priv->nwrq--;
   spin_unlock_irqrestore(&priv->lock, flags);
@@ -3337,6 +3349,11 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
         {
           cdcwrite_timeout_cnt ++;
           break;
+        }
+
+      if (!(up_interrupt_context() || sched_idletask()))
+        {
+          usleep(10);
         }
     }
   while (len < buflen);

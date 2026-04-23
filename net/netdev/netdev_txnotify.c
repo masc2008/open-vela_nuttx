@@ -119,6 +119,7 @@ void netdev_txnotify_dev(FAR struct net_driver_s *dev, uint32_t polltype)
 
       /* Notify the device driver that new TX data is available. */
 
+      ninfo("%d, dev %s\n", __LINE__, dev->d_ifname);
       dev->d_txavail(dev);
     }
 }

@@ -68,6 +68,7 @@ int parse_txtable_partition(FAR struct partition_state_s *state,
                             partition_handler_t handler,
                             FAR void *arg)
 {
+  FAR void *xipbase = NULL;
   FAR char *save_ptr;
   FAR char *token;
   FAR struct partition_s *part;
@@ -76,6 +77,19 @@ int parse_txtable_partition(FAR struct partition_state_s *state,
   int ret = OK;
   int i;
   int j;
+
+  /* TXTABLE is only supported on MTD devices with a valid XIP mapping. */
+
+  if (state->blk != NULL)
+    {
+      return -ENODEV;
+    }
+
+  ret = MTD_IOCTL(state->mtd, BIOC_XIPBASE, (unsigned long)&xipbase);
+  if (ret < 0 || xipbase == NULL)
+    {
+      return ret < 0 ? ret : -ENODEV;
+    }
 
   /* Allocate memory for table of parsed and raw */
 

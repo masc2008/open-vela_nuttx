@@ -257,6 +257,10 @@ static void    cdcuart_dmareceive(FAR struct uart_dev_s *dev);
 static FAR struct cdcacm_dev_s *g_syslog_cdcacm;
 #endif
 
+#ifdef CONFIG_LTELOG_CDCACM
+static FAR struct cdcacm_dev_s *g_ltelog_cdcacm;
+#endif
+
 /* USB class device *********************************************************/
 
 static const struct usbdevclass_driverops_s g_driverops =
@@ -3379,6 +3383,85 @@ void cdcacm_disable_syslog(void)
 }
 #endif
 
+#ifdef CONFIG_LTELOG_CDCACM
+/****************************************************************************
+ * Name: cdcacm_ltewrite
+ *
+ * Description:
+ *   This provides a cdcacm write method for lte log devices that support
+ *   multiple byte writes
+ *
+ * Input Parameters:
+ *   buffer - The buffer containing the data to be output
+ *   buflen - The number of bytes in the buffer
+ *
+ * Returned Value:
+ *   On success, the number of characters written is returned.  A negated
+ *  *   errno value is returned on any failure.
+ *
+ ****************************************************************************/
+ssize_t cdcacm_ltewrite(FAR const char *buffer, size_t buflen)
+{
+  size_t len = 0;
+  irqstate_t flags;
+  const clock_t timeout = MSEC2TICK(2);
+  clock_t start;
+  FAR struct cdcacm_dev_s *priv = NULL;
+
+  start = clock_systime_ticks();
+  do
+    {
+      flags = enter_critical_section();
+      priv = g_ltelog_cdcacm;
+      if (!priv || !(priv->ctrlline & 1))
+        {
+          leave_critical_section(flags);
+          return -EINVAL;
+        }
+
+#ifdef CONFIG_SERIAL_REMOVABLE
+      if (priv->serdev.disconnected)
+        {
+          leave_critical_section(flags);
+          return -EINVAL;
+        }
+#endif
+
+      if (cdcuart_txready(&priv->serdev))
+        {
+          ssize_t ret = cdcuart_sendbuf(&priv->serdev,
+                                        buffer + len,
+                                        buflen - len);
+          if (ret < 0)
+            {
+              leave_critical_section(flags);
+              return ret;
+            }
+          len += ret;
+
+          leave_critical_section(flags);
+        }
+      else
+        {
+          leave_critical_section(flags);
+
+          if (clock_systime_ticks() - start > timeout)
+            {
+              break;
+            }
+
+          if (!(flags != 0 || up_interrupt_context() || sched_idletask()))
+            {
+              usleep(10);
+            }
+        }
+    }
+  while (len < buflen);
+
+  return len;
+}
+#endif
+
 /****************************************************************************
  * Name: cdcacm_classobject
  *
@@ -3520,6 +3603,12 @@ int cdcacm_classobject(int minor, FAR struct usbdev_devinfo_s *devinfo,
       g_syslog_cdcacm = priv;
     }
 #endif
+#ifdef CONFIG_LTELOG_CDCACM
+  if (minor == CONFIG_LTELOG_CDCACM_MINOR)
+    {
+      g_ltelog_cdcacm = priv;
+    }
+  #endif
 
   return OK;
 
@@ -3640,6 +3729,12 @@ void cdcacm_uninitialize(FAR struct usbdevclass_driver_s *classdev)
   if (g_syslog_cdcacm == priv)
     {
       g_syslog_cdcacm = NULL;
+    }
+#endif
+#ifdef CONFIG_LTELOG_CDCACM
+  if (g_ltelog_cdcacm == priv)
+    {
+      g_ltelog_cdcacm = NULL;
     }
 #endif
 

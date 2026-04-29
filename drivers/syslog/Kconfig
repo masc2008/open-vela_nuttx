@@ -294,15 +294,30 @@ config SYSLOG_RPMSG_BUFFER_SECTION
 		The section shall not be initialized on system boot.
 
 config SYSLOG_CDCACM
-	bool "Log to CDCACM"
+	bool "SYS Log to CDCACM"
 	depends on CDCACM
 	default n
 	---help---
 		Use the CDCACM as a SYSLOG output device, send message to remote proc.
 
+config LTELOG_CDCACM
+	bool "LTE Log to CDCACM"
+	depends on CDCACM
+	default n
+	---help---
+		Use the CDCACM as a LTELOG output device, send message to remote proc.
+
 config SYSLOG_CDCACM_MINOR
 	int "The syslog CDCACM minor number"
 	depends on SYSLOG_CDCACM
+	default 0
+	---help---
+		If there are more than one CDCACM devices, then a device minor number
+		may also need to be provided. Default: 0
+
+config LTELOG_CDCACM_MINOR
+	int "The ltelog CDCACM minor number"
+	depends on LTELOG_CDCACM
 	default 0
 	---help---
 		If there are more than one CDCACM devices, then a device minor number

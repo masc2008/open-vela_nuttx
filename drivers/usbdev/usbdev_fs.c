@@ -818,7 +818,11 @@ static ssize_t usbdev_fs_write(FAR struct file *filep,
 
           usbtrace(TRACE_CLSERROR(USBSER_TRACEERR_SUBMITFAIL),
                    (uint16_t)-ret);
-          PANIC();
+
+          flags = enter_critical_section();
+          sq_addlast(&container->node, &fs_ep->reqq);
+          leave_critical_section(flags);
+
           break;
         }
 

@@ -2049,4 +2049,48 @@ config USBMOUSE_INTERFACESTR
 
 endif # USBMOUSE
 
+menuconfig USBHID
+	bool "USB VENDOR HID support"
+	default n
+	---help---
+		Enables USB VENDOR HID CLASS support
+
+if USBHID
+
+config USBHID_FSEPINT_INTERVAL
+	int "Interrupt FS IN poll interval"
+	default 4
+	---help---
+		The poll interval for the Interrupt IN endpoint, Default 4.
+
+config USBHID_HSEPINT_INTERVAL
+	int "Interrupt HS IN poll interval"
+	default 8
+	---help---
+		The poll interval for the Interrupt IN endpoint, Default 8.
+
+config USBHID_EPINT_SIZE
+		int "Interrupt IN MAXPACKET size"
+		default 64
+		---help---
+			Max package size for the Interrupt IN endpoint, Default 64.
+
+config USBHID_NRDREQS
+		int "Number of read requests that can be in flight"
+		default 4
+		---help---
+			The number of read requests that can be in flight
+
+config USBHID_NWRREQS
+		int "Number of write requests that can be in flight"
+		default 4
+		---help---
+			The number of write requests that can be in flight
+
+config USBHID_INTERFACESTR
+	string "Interface descriptor string"
+	default "HID Interface"
+
+endif # USBHID
+
 endif # USBDEV

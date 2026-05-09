@@ -76,6 +76,10 @@ if(CONFIG_USBDEV)
     list(APPEND SRCS hidmouse.c)
   endif()
 
+  if(CONFIG_USBHID)
+    list(APPEND SRCS hidvendor.c)
+  endif()
+
   list(APPEND SRCS composite.c usbdev_desc.c usbdev_req.c)
   list(APPEND SRCS usbdev_trace.c usbdev_trprintf.c)
 

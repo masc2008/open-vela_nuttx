@@ -396,14 +396,12 @@ static ssize_t usbdev_fs_write(FAR struct file *filep,
 {
   FAR struct inode *inode = filep->f_inode;
   FAR struct mouse_driver_s *priv = inode->i_private;
-  irqstate_t flags;
-  int wlen = 0;
   int ret;
 
   ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
-      return ret;
+      goto errout;
     }
 
   if (len > (CONFIG_USBMOUSE_EPINTIN_SIZE - 1))

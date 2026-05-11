@@ -40,6 +40,8 @@
 
 #include "group/group.h"
 
+extern void hal_uart_printf(const char *fmt, ...);
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -75,16 +77,23 @@ int group_setupidlefiles(void)
 
 #if defined(CONFIG_DEV_CONSOLE) || defined(CONFIG_DEV_NULL)
 #  ifdef CONFIG_DEV_CONSOLE
+  hal_uart_printf("xxx group_setupidlefiles: before open console\n");
   fd = nx_open("/dev/console", O_RDWR);
+  hal_uart_printf("xxx group_setupidlefiles: after open console fd:%d\n", fd);
 #  else
+  hal_uart_printf("xxx group_setupidlefiles: before open null\n");
   fd = nx_open("/dev/null", O_RDWR);
+  hal_uart_printf("xxx group_setupidlefiles: after open null fd:%d\n", fd);
 #  endif
   if (fd == 0)
     {
       /* Successfully opened stdin (fd == 0) */
 
+      hal_uart_printf("xxx group_setupidlefiles: before dup stdout\n");
       nx_dup2(0, 1);
+      hal_uart_printf("xxx group_setupidlefiles: before dup stderr\n");
       nx_dup2(0, 2);
+      hal_uart_printf("xxx group_setupidlefiles: after dup stdio\n");
     }
   else
     {
@@ -117,5 +126,6 @@ int group_setupidlefiles(void)
 #endif /* defined(CONFIG_DEV_CONSOLE) || defined(CONFIG_DEV_NULL) */
 
   sched_trace_end();
+  hal_uart_printf("xxx group_setupidlefiles: leave ret:%d\n", ret);
   return ret;
 }

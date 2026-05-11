@@ -719,33 +719,45 @@ static int uart_open(FAR struct file *filep)
             }
         }
 
-      /* In any event, we do have to configure for interrupt driven mode of
-       * operation.  Attach the hardware IRQ(s). Hmm.. should shutdown() the
-       * the device in the rare case that uart_attach() fails, tmp==1, and
-       * this is not the console.
+      /* For this bring-up image, keep the already-running early console UART
+       * untouched.  The BES lower half currently blocks when the console is
+       * reopened for interrupt-driven RX.
        */
 
-      ret = uart_attach(dev);
-      if (ret < 0)
+      if (dev->isconsole)
         {
-          if (!dev->isconsole)
+          extern void hal_uart_printf(const char *fmt, ...);
+
+          hal_uart_printf("xxx uart_open: skip console attach for bringup\n");
+        }
+      else
+        {
+          /* In any event, we do have to configure for interrupt driven mode
+           * of operation.  Attach the hardware IRQ(s). Hmm.. should
+           * shutdown() the device in the rare case that uart_attach() fails,
+           * tmp==1, and this is not the console.
+           */
+
+          ret = uart_attach(dev);
+          if (ret < 0)
             {
               uart_shutdown(dev);
+
+              uart_spinunlock(dev, false, flags);
+              goto errout_with_lock;
             }
 
-          uart_spinunlock(dev, false, flags);
-          goto errout_with_lock;
-        }
-
 #ifdef CONFIG_SERIAL_RXDMA
-      /* Notify DMA that there is free space in the RX buffer */
+          /* Notify DMA that there is free space in the RX buffer */
 
-      uart_dmarxfree(dev);
+          uart_dmarxfree(dev);
 #endif
 
-      /* Enable the RX interrupt */
+          /* Enable the RX interrupt */
 
-      uart_enablerxint(dev);
+          uart_enablerxint(dev);
+        }
+
       uart_spinunlock(dev, false, flags);
     }
 
@@ -1374,6 +1386,26 @@ static ssize_t uart_write(FAR struct file *filep, FAR const char *buffer,
   irqstate_t        flags;
   int               ret;
   char              ch;
+
+  if (dev->isconsole)
+    {
+      extern int hal_uart_get_port(void);
+      extern int hal_uart_blocked_putc(int id, uint8_t c);
+      int port = hal_uart_get_port();
+      size_t i;
+
+      for (i = 0; i < buflen; i++)
+        {
+          if (buffer[i] == '\n')
+            {
+              hal_uart_blocked_putc(port, '\r');
+            }
+
+          hal_uart_blocked_putc(port, buffer[i]);
+        }
+
+      return buflen;
+    }
 
   /* We may receive serial writes through this path from interrupt handlers
    * and from debug output in the IDLE task!  In these cases, we will need to

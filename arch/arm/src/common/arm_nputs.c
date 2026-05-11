@@ -37,7 +37,7 @@
  *
  ****************************************************************************/
 
-void up_nputs(const char *str, size_t len)
+void __attribute__((weak)) up_nputs(const char *str, size_t len)
 {
   while (len-- > 0 && *str)
     {

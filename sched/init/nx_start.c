@@ -67,6 +67,8 @@
 #include "tls/tls.h"
 #include "wqueue/wqueue.h"
 
+extern void hal_uart_printf(const char *fmt, ...);
+
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -671,30 +673,42 @@ static void hardware_initialize(void)
 
   /* Initialize the interrupt handling subsystem (if included) */
 
+  hal_uart_printf("xxx hardware_initialize: before irq_initialize\n");
   irq_initialize();
+  hal_uart_printf("xxx hardware_initialize: after irq_initialize\n");
 
   /* Initialize the POSIX timer facility (if included in the link) */
 
+  hal_uart_printf("xxx hardware_initialize: before clock_initialize\n");
   clock_initialize();
+  hal_uart_printf("xxx hardware_initialize: after clock_initialize\n");
 
 #ifndef CONFIG_DISABLE_POSIX_TIMERS
+  hal_uart_printf("xxx hardware_initialize: before timer_initialize\n");
   timer_initialize();
+  hal_uart_printf("xxx hardware_initialize: after timer_initialize\n");
 #endif
 
   /* Initialize the signal facility (if in link) */
 
+  hal_uart_printf("xxx hardware_initialize: before nxsig_initialize\n");
   nxsig_initialize();
+  hal_uart_printf("xxx hardware_initialize: after nxsig_initialize\n");
 
 #if !defined(CONFIG_DISABLE_MQUEUE) || !defined(CONFIG_DISABLE_MQUEUE_SYSV)
   /* Initialize the named message queue facility (if in link) */
 
+  hal_uart_printf("xxx hardware_initialize: before nxmq_initialize\n");
   nxmq_initialize();
+  hal_uart_printf("xxx hardware_initialize: after nxmq_initialize\n");
 #endif
 
 #ifdef CONFIG_NET
   /* Initialize the networking system */
 
+  hal_uart_printf("xxx hardware_initialize: before net_initialize\n");
   net_initialize();
+  hal_uart_printf("xxx hardware_initialize: after net_initialize\n");
 #endif
 
 #ifndef CONFIG_BINFMT_DISABLE
@@ -711,11 +725,15 @@ static void hardware_initialize(void)
    * that are different for each  processor and hardware platform.
    */
 
+  hal_uart_printf("xxx hardware_initialize: before up_initialize\n");
   up_initialize();
+  hal_uart_printf("xxx hardware_initialize: after up_initialize\n");
 
   /* Initialize common drivers */
 
+  hal_uart_printf("xxx hardware_initialize: before drivers_initialize\n");
   drivers_initialize();
+  hal_uart_printf("xxx hardware_initialize: after drivers_initialize\n");
 
 #ifdef CONFIG_BOARD_EARLY_INITIALIZE
   /* Call the board-specific up_initialize() extension to support
@@ -723,9 +741,11 @@ static void hardware_initialize(void)
    * that cannot wait until board_late_initialize.
    */
 
+  hal_uart_printf("xxx hardware_initialize: before board_early_initialize\n");
   boards_trace_begin();
   board_early_initialize();
   boards_trace_end();
+  hal_uart_printf("xxx hardware_initialize: after board_early_initialize\n");
 #endif
 
   /* Hardware resources are now available */
@@ -762,6 +782,7 @@ void nx_start(void)
 
   /* Boot up is complete */
 
+  hal_uart_printf("xxx nx_start: entry\n");
   g_nx_initstate = OSINIT_BOOT;
   sched_trace_begin();
   sinfo("Entry\n");
@@ -772,11 +793,15 @@ void nx_start(void)
 
   /* The memory manager has been initialized */
 
+  hal_uart_printf("xxx nx_start: before memory_initialize\n");
   memory_initialize();
+  hal_uart_printf("xxx nx_start: after memory_initialize\n");
 
   /* MCU-specific hardware is initialized */
 
+  hal_uart_printf("xxx nx_start: before hardware_initialize\n");
   hardware_initialize();
+  hal_uart_printf("xxx nx_start: after hardware_initialize\n");
 
   /* Setup for Multi-Tasking ************************************************/
 
@@ -791,7 +816,10 @@ void nx_start(void)
    * IDLE task.
    */
 
+  hal_uart_printf("xxx nx_start: before group_setupidlefiles masc!!!!!!!!!!!!!\n");
+  hal_uart_printf("xxx nx_start: !!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
   DEBUGVERIFY(group_setupidlefiles());
+  hal_uart_printf("xxx nx_start: after group_setupidlefiles\n");
 
 #ifdef CONFIG_SMP
   for (i = 1; i < CONFIG_SMP_NCPUS; i++)
@@ -823,7 +851,9 @@ void nx_start(void)
 
   /* Create initial tasks and bring-up the system */
 
+  hal_uart_printf("xxx nx_start: before nx_bringup\n");
   nx_bringup();
+  hal_uart_printf("xxx nx_start: after nx_bringup\n");
 
   /* Enter to idleloop */
 
@@ -833,7 +863,9 @@ void nx_start(void)
   /* Let other threads have access to the memory manager */
 
   sched_trace_end();
+  hal_uart_printf("xxx nx_start: before sched_unlock\n");
   sched_unlock();
+  hal_uart_printf("xxx nx_start: after sched_unlock\n");
 
   /* The IDLE Loop **********************************************************/
 

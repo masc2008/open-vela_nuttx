@@ -719,44 +719,30 @@ static int uart_open(FAR struct file *filep)
             }
         }
 
-      /* For this bring-up image, keep the already-running early console UART
-       * untouched.  The BES lower half currently blocks when the console is
-       * reopened for interrupt-driven RX.
+      /* In any event, we do have to configure for interrupt driven mode
+       * of operation.  Attach the hardware IRQ(s). Hmm.. should
+       * shutdown() the device in the rare case that uart_attach() fails,
+       * tmp==1, and this is not the console.
        */
 
-      if (dev->isconsole)
+      ret = uart_attach(dev);
+      if (ret < 0)
         {
-          extern void hal_uart_printf(const char *fmt, ...);
+          uart_shutdown(dev);
 
-          hal_uart_printf("xxx uart_open: skip console attach for bringup\n");
+          uart_spinunlock(dev, false, flags);
+          goto errout_with_lock;
         }
-      else
-        {
-          /* In any event, we do have to configure for interrupt driven mode
-           * of operation.  Attach the hardware IRQ(s). Hmm.. should
-           * shutdown() the device in the rare case that uart_attach() fails,
-           * tmp==1, and this is not the console.
-           */
-
-          ret = uart_attach(dev);
-          if (ret < 0)
-            {
-              uart_shutdown(dev);
-
-              uart_spinunlock(dev, false, flags);
-              goto errout_with_lock;
-            }
 
 #ifdef CONFIG_SERIAL_RXDMA
-          /* Notify DMA that there is free space in the RX buffer */
+      /* Notify DMA that there is free space in the RX buffer */
 
-          uart_dmarxfree(dev);
+      uart_dmarxfree(dev);
 #endif
 
-          /* Enable the RX interrupt */
+      /* Enable the RX interrupt */
 
-          uart_enablerxint(dev);
-        }
+      uart_enablerxint(dev);
 
       uart_spinunlock(dev, false, flags);
     }

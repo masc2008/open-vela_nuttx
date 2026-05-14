@@ -76,7 +76,8 @@ void up_initialize(void)
    */
 
   hal_uart_printf("xxx up_initialize: before arm_pminitialize\n");
-  hal_uart_printf("xxx up_initialize: skip arm_pminitialize for bringup\n");
+  arm_pminitialize();
+  hal_uart_printf("xxx up_initialize: after arm_pminitialize\n");
 #endif
 
 #ifdef CONFIG_ARCH_DMA

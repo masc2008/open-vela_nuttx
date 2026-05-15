@@ -816,7 +816,8 @@ void nx_start(void)
    * IDLE task.
    */
 
-  hal_uart_printf("xxx nx_start: before group_setupidlefiles\n");
+  hal_uart_printf("xxx nx_start: before group_setupidlefiles masc!!!!!!!!!!!!!\n");
+  hal_uart_printf("xxx nx_start: !!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
   DEBUGVERIFY(group_setupidlefiles());
   hal_uart_printf("xxx nx_start: after group_setupidlefiles\n");
 

@@ -944,7 +944,7 @@ if(CONFIG_BUILD_PROTECTED)
 
   target_include_directories(
     nuttx_user SYSTEM
-    PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_BINARY_DIR}/include
+    PRIVATE ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include
             ${CMAKE_BINARY_DIR}/include_arch)
 
   add_custom_command(
@@ -985,7 +985,7 @@ if(CONFIG_ELF_FIXUP)
   list(TRANSFORM NUTTX_INCLUDES PREPEND -I)
   get_property(NUTTX_EXTRA_FLAGS GLOBAL PROPERTY NUTTX_EXTRA_FLAGS)
   set(CMAKE_C_ELF_FLAGS
-      -I${CMAKE_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/include
+      -I${CMAKE_BINARY_DIR}/include -I${CMAKE_SOURCE_DIR}/include
       ${NUTTX_INCLUDES} ${NUTTX_EXTRA_FLAGS})
   if(CONFIG_BUILD_PROTECTED)
     set(FINNAL_ELF nuttx_user)

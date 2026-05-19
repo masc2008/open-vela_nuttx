@@ -61,6 +61,11 @@ ipv4_fragout_buildipv4header(FAR struct ipv4_hdr_s *ref,
                              FAR struct ipv4_hdr_s *ipv4,
                              uint16_t len, uint16_t ipoff);
 
+#if defined(CONFIG_BES_IPSEC) && CONFIG_BES_IPSEC
+extern int ipsecdev_output_ip4_ipfrag(struct net_driver_s *dev);
+extern int ipsecdev_input_ip4_ipfrag(struct net_driver_s *dev);
+#endif
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -314,7 +319,15 @@ int32_t ipv4_fragin(FAR struct net_driver_s *dev)
       /* Free the memory of node */
 
       kmm_free(node);
-
+#if defined(CONFIG_BES_IPSEC) && CONFIG_BES_IPSEC
+      /* in ims,only deal ipsec frag pack, 0x32 is IPSEC_ESP */
+      struct ipv4_hdr_s *ipv4 = (struct ipv4_hdr_s *)(dev->d_iob->io_data + dev->d_iob->io_offset);
+      if (ipv4->proto == 0x32)
+        {
+          /* fragment pack is ipsec-esp pack */
+          ipsecdev_input_ip4_ipfrag(dev);
+        }
+#endif
       return ipv4_input(dev);
     }
 
@@ -377,7 +390,9 @@ int32_t ipv4_fragout(FAR struct net_driver_s *dev, uint16_t mtu)
   /* Reconstruct I/O Buffer according to MTU, which will reserve
    * the space for the L3 header
    */
-
+#if defined(CONFIG_BES_IPSEC) && CONFIG_BES_IPSEC
+  ipsecdev_output_ip4_ipfrag(dev);
+#endif
   nfrags = ip_fragout_slice(dev->d_iob, PF_INET, mtu, hdrlen, &fragq);
   netdev_iob_clear(dev);
 

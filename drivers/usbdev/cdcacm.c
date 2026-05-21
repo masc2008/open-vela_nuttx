@@ -375,10 +375,7 @@ static ssize_t cdcuart_sendbuf(FAR struct uart_dev_s *dev,
 
   /* Get the maximum number of bytes that will fit into one bulk IN request */
 #ifdef CONFIG_BES_HAVE_USB
-  if (reqlen > CONFIG_CDCACM_BULKIN_REQLEN)
-    {
-      reqlen = CONFIG_CDCACM_BULKIN_REQLEN;
-    }
+  reqlen = CONFIG_CDCACM_BULKIN_REQLEN;
 #else
   reqlen = MIN(CONFIG_CDCACM_BULKIN_REQLEN, ep->maxpacket);
 #endif
@@ -3335,30 +3332,35 @@ ssize_t cdcacm_write(FAR const char *buffer, size_t buflen)
               return ret;
             }
           len += ret;
+
+          sending_state = 0;
+          leave_critical_section(flags);
         }
-
-      sending_state = 0;
-      leave_critical_section(flags);
-
-      if (cdcwrite_timeout_cnt > CDC_TX_TIMEOUT_MAX)
+      else
         {
-          break;
-        }
+          sending_state = 0;
+          leave_critical_section(flags);
 
-      if (clock_systime_ticks() - start > timeout)
-        {
-          cdcwrite_timeout_cnt ++;
-          break;
-        }
+          if (cdcwrite_timeout_cnt > CDC_TX_TIMEOUT_MAX)
+            {
+              break;
+            }
 
-      if (!(up_interrupt_context() || sched_idletask()))
-        {
-          usleep(10);
+          if (clock_systime_ticks() - start > timeout)
+            {
+              cdcwrite_timeout_cnt ++;
+              break;
+            }
+
+          if (!(flags != 0 || up_interrupt_context() || sched_idletask()))
+            {
+              usleep(10);
+            }
         }
     }
   while (len < buflen);
 
-  return buflen;
+  return len;
 }
 
 /****************************************************************************

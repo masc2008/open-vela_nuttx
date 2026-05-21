@@ -40,6 +40,7 @@
 #include <nuttx/mutex.h>
 #include <nuttx/rwsem.h>
 #include <nuttx/semaphore.h>
+#include <nuttx/init.h>
 
 #include "rpmsg.h"
 #include "rpmsg_trace.h"
@@ -927,7 +928,7 @@ int rpmsg_ioctl(FAR const char *cpuname, int cmd, unsigned long arg)
 
 int rpmsg_foreach(rpmsg_foreach_t handler, FAR void *arg)
 {
-  bool needlock = !up_interrupt_context() && !sched_idletask();
+  bool needlock = !up_interrupt_context() && !sched_idletask() && !OSINIT_IS_PANIC();
   FAR struct rpmsg_s *rpmsg;
   int ret = OK;
 
@@ -976,7 +977,7 @@ void rpmsg_modify_signals(FAR struct rpmsg_s *rpmsg,
 
   /* Send signal to Router Hub */
 
-  needlock = !up_interrupt_context() && !sched_idletask();
+  needlock = !up_interrupt_context() && !sched_idletask() && !OSINIT_IS_PANIC();
   if (needlock)
     {
       metal_mutex_acquire(&rdev->lock);

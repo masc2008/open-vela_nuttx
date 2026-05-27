@@ -1049,7 +1049,11 @@ static int rptun_do_ioctl(FAR struct rptun_priv_s *priv, int cmd,
         /* Keep compatibility with the older common_v2 design where the
          * /dev/rptun/<cpu> node also handled RPMSG ioctls such as ping.
          */
+        syslog(LOG_EMERG, "RPTUN_TO_RPMSG: cpu=%s cmd=0x%x arg=0x%lx before\n",
+               RPTUN_GET_CPUNAME(priv->dev), cmd, arg);
         ret = rpmsg_ioctl(RPTUN_GET_CPUNAME(priv->dev), cmd, arg);
+        syslog(LOG_EMERG, "RPTUN_TO_RPMSG: cpu=%s cmd=0x%x ret=%d after\n",
+               RPTUN_GET_CPUNAME(priv->dev), cmd, ret);
         break;
     }
 

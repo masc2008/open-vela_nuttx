@@ -228,9 +228,21 @@ static int rpmsg_ioctl_foreach_cb(FAR struct rpmsg_s *rpmsg, FAR void *arg)
   FAR struct rpmsg_ioctl_s *info = (FAR struct rpmsg_ioctl_s *)arg;
   int ret = OK;
 
+  syslog(LOG_EMERG, "RPMSG_IOCTL_FOREACH: target=%s current=%s local=%s cmd=0x%x\n",
+         info->cpuname ? info->cpuname : "<all>",
+         rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
+         rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
+         info->cmd);
+
   if (!info->cpuname || !strcmp(rpmsg->cpuname, info->cpuname))
     {
+      syslog(LOG_EMERG, "RPMSG_IOCTL_MATCH: remote=%s local=%s cmd=0x%x\n",
+             rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
+             rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
+             info->cmd);
       ret = rpmsg_dev_ioctl_(rpmsg, info->cmd, info->arg);
+      syslog(LOG_EMERG, "RPMSG_IOCTL_RET: remote=%s cmd=0x%x ret=%d\n",
+             rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>", info->cmd, ret);
     }
 
   return ret;
@@ -863,6 +875,12 @@ int rpmsg_register(FAR const char *path, FAR struct rpmsg_s *rpmsg,
               list_add_tail(&g_rpmsg, &rpmsg->node);
               up_write(&g_rpmsg_lock);
 
+              syslog(LOG_EMERG, "RPMSG_REGISTER: path=%s remote=%s local=%s nrx=%u\n",
+                     path,
+                     rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
+                     rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
+                     nrx);
+
               rpmsg->nbreboot.notifier_call = rpmsg_reboot_notifier;
               register_reboot_notifier(&rpmsg->nbreboot);
             }
@@ -918,11 +936,19 @@ int rpmsg_ioctl(FAR const char *cpuname, int cmd, unsigned long arg)
 {
   struct rpmsg_ioctl_s info;
 
+  syslog(LOG_EMERG, "RPMSG_IOCTL_ENTRY: target=%s cmd=0x%x arg=0x%lx\n",
+         cpuname ? cpuname : "<all>", cmd, arg);
+
   info.cpuname = cpuname;
   info.cmd = cmd;
   info.arg = arg;
 
-  return rpmsg_foreach(rpmsg_ioctl_foreach_cb, &info);
+  {
+    int ret = rpmsg_foreach(rpmsg_ioctl_foreach_cb, &info);
+    syslog(LOG_EMERG, "RPMSG_IOCTL_EXIT: target=%s cmd=0x%x ret=%d\n",
+           cpuname ? cpuname : "<all>", cmd, ret);
+    return ret;
+  }
 }
 
 int rpmsg_foreach(rpmsg_foreach_t handler, FAR void *arg)

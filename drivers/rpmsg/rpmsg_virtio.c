@@ -716,10 +716,20 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
 
   if (vdev->role == VIRTIO_DEV_DRIVER)
     {
+      FAR struct virtio_vring_info *rxvr = &vdev->vrings_info[0];
+      FAR struct virtio_vring_info *txvr = &vdev->vrings_info[1];
+      FAR void *shmbuf_va0 = NULL;
+      FAR void *shmbuf_va1 = NULL;
+      size_t vring_sz0;
+      size_t vring_sz1;
+      size_t shbufsz0;
+      size_t shbufsz1;
+
+      shbufsz0 = config.r2h_buf_size * rxvr->info.num_descs;
+      shbufsz1 = config.h2r_buf_size * txvr->info.num_descs;
+
       if (virtio_has_feature(vdev, VIRTIO_RPMSG_F_BUFADDR))
         {
-          FAR void *shmbuf_va0;
-          FAR void *shmbuf_va1;
           uint64_t shmbuf_pa0 = 0ull;
           uint64_t shmbuf_pa1 = 0ull;
 
@@ -729,9 +739,10 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
 
           virtio_read_config_member(vdev, struct fw_rsc_config, r2h_buf_addr,
                                     &shmbuf_pa0);
-          shmbuf_va0 = up_addrenv_pa_to_va((uintptr_t)shmbuf_pa0);
-          rpmsg_virtio_init_shm_pool(&priv->pool[0], shmbuf_va0,
-                  config.r2h_buf_size * vdev->vrings_info[0].info.num_descs);
+          if (shmbuf_pa0 != 0ull)
+            {
+              shmbuf_va0 = up_addrenv_pa_to_va((uintptr_t)shmbuf_pa0);
+            }
 
           /* In OpenAMP, priv->pool[1] is the TX share memory pool,
            * should use h2r_buf_addr and h2r_buf_size
@@ -739,14 +750,44 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
 
           virtio_read_config_member(vdev, struct fw_rsc_config, h2r_buf_addr,
                                     &shmbuf_pa1);
-          shmbuf_va1 = up_addrenv_pa_to_va((uintptr_t)shmbuf_pa1);
-          rpmsg_virtio_init_shm_pool(&priv->pool[1], shmbuf_va1,
-                  config.h2r_buf_size * vdev->vrings_info[1].info.num_descs);
-
-          config.split_shpool = true;
+          if (shmbuf_pa1 != 0ull)
+            {
+              shmbuf_va1 = up_addrenv_pa_to_va((uintptr_t)shmbuf_pa1);
+            }
         }
 
-      nrx = vdev->vrings_info[0].info.num_descs;
+      if (shmbuf_va0 == NULL || shmbuf_va1 == NULL)
+        {
+          /* BES transq packs vring metadata followed by RPMSG buffers in the
+           * same shared region. Fall back to deriving pool bases from the
+           * vring layout when BUFADDR is not advertised or not usable.
+           */
+
+          vring_sz0 = ALIGN_UP(vring_size(rxvr->info.num_descs,
+                                          rxvr->info.align),
+                               rxvr->info.align);
+          vring_sz1 = ALIGN_UP(vring_size(txvr->info.num_descs,
+                                          txvr->info.align),
+                               txvr->info.align);
+          shmbuf_va0 = (FAR char *)rxvr->info.vaddr + vring_sz0;
+          shmbuf_va1 = (FAR char *)txvr->info.vaddr + vring_sz1;
+          syslog(LOG_EMERG,
+                 "RPMSG_VIRTIO_POOL: fallback rx_vring=%p tx_vring=%p rx_buf=%p tx_buf=%p rx_sz=%zu tx_sz=%zu\n",
+                 rxvr->info.vaddr, txvr->info.vaddr, shmbuf_va0, shmbuf_va1,
+                 shbufsz0, shbufsz1);
+        }
+      else
+        {
+          syslog(LOG_EMERG,
+                 "RPMSG_VIRTIO_POOL: bufaddr rx_buf=%p tx_buf=%p rx_sz=%zu tx_sz=%zu\n",
+                 shmbuf_va0, shmbuf_va1, shbufsz0, shbufsz1);
+        }
+
+      rpmsg_virtio_init_shm_pool(&priv->pool[0], shmbuf_va0, shbufsz0);
+      rpmsg_virtio_init_shm_pool(&priv->pool[1], shmbuf_va1, shbufsz1);
+      config.split_shpool = true;
+
+      nrx = rxvr->info.num_descs;
     }
   else
     {

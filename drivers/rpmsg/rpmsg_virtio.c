@@ -756,12 +756,17 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
   /* Register the rpmsg to rpmsg framework */
 
   snprintf(name, sizeof(name), "/dev/rpmsg/%s", priv->rpmsg.cpuname);
+  syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: register name=%s remote=%s local=%s nrx=%u role=%d\n",
+         name, priv->rpmsg.cpuname, priv->rpmsg.local_cpuname, nrx, vdev->role);
   ret = rpmsg_register(name, &priv->rpmsg, &g_rpmsg_virtio_ops, nrx);
+  syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: rpmsg_register ret=%d name=%s\n", ret, name);
   if (ret >= 0)
     {
+      syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: before rpmsg_init_vdev name=%s\n", name);
       ret = rpmsg_init_vdev_with_config(&priv->rvdev, vdev, rpmsg_ns_bind,
                                         metal_io_get_region(),
                                         priv->pool, &config);
+      syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: after rpmsg_init_vdev ret=%d name=%s\n", ret, name);
       if (ret >= 0)
         {
           priv->notifytx = priv->rvdev.svq->notify;
@@ -776,6 +781,7 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
 
           /* Broadcast device_created to all registers */
 
+          syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: device_created name=%s\n", name);
           rpmsg_device_created(&priv->rpmsg);
 
           /* Open tx buffer return callback */
@@ -784,6 +790,7 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
         }
       else
         {
+          syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: init_vdev failed ret=%d name=%s\n", ret, name);
           rpmsgerr("rpmsg_init_vdev failed, ret=%d\n", ret);
           rpmsg_unregister(name, &priv->rpmsg);
         }
@@ -908,6 +915,8 @@ void rpmsg_virtio_remove(FAR struct virtio_device *vdev)
   /* Unregister the rpmsg */
 
   snprintf(name, sizeof(name), "/dev/rpmsg/%s", priv->rpmsg.cpuname);
+  syslog(LOG_EMERG, "RPMSG_VIRTIO_REMOVE: unregister name=%s remote=%s local=%s init=%d role=%d\n",
+         name, priv->rpmsg.cpuname, priv->rpmsg.local_cpuname, priv->rpmsg.init, vdev->role);
   rpmsg_unregister(name, &priv->rpmsg);
 
   /* Disable tx buffer return callback */

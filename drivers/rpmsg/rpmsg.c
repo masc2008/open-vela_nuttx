@@ -746,6 +746,10 @@ void rpmsg_ns_unbind(FAR struct rpmsg_device *rdev,
 
 void rpmsg_device_created(FAR struct rpmsg_s *rpmsg)
 {
+  syslog(LOG_EMERG, "RPMSG_DEVICE_CREATED: remote=%s local=%s init=%d\n",
+         rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
+         rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
+         rpmsg->init);
   FAR struct rpmsg_device *rdev = rpmsg_get_rdev_by_rpmsg(rpmsg);
   FAR struct rpmsg_cb_s *tmp;
   FAR struct rpmsg_cb_s *cb;
@@ -775,6 +779,10 @@ void rpmsg_device_created(FAR struct rpmsg_s *rpmsg)
 
 void rpmsg_device_destory(FAR struct rpmsg_s *rpmsg)
 {
+  syslog(LOG_EMERG, "RPMSG_DEVICE_DESTROY: remote=%s local=%s init=%d\n",
+         rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
+         rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
+         rpmsg->init);
   FAR struct rpmsg_device *rdev = rpmsg_get_rdev_by_rpmsg(rpmsg);
   FAR struct rpmsg_bind_s *bind_tmp;
   FAR struct rpmsg_bind_s *bind;
@@ -903,6 +911,11 @@ int rpmsg_register(FAR const char *path, FAR struct rpmsg_s *rpmsg,
 
 void rpmsg_unregister(FAR const char *path, FAR struct rpmsg_s *rpmsg)
 {
+  syslog(LOG_EMERG, "RPMSG_UNREGISTER: path=%s remote=%s local=%s init=%d\n",
+         path,
+         rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
+         rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
+         rpmsg->init);
   unregister_reboot_notifier(&rpmsg->nbreboot);
 
   down_write(&g_rpmsg_lock);
@@ -953,6 +966,7 @@ int rpmsg_ioctl(FAR const char *cpuname, int cmd, unsigned long arg)
 
 int rpmsg_foreach(rpmsg_foreach_t handler, FAR void *arg)
 {
+  int count = 0;
   bool needlock = !up_interrupt_context() && !sched_idletask();
   FAR struct rpmsg_s *rpmsg;
   int ret = OK;
@@ -964,6 +978,12 @@ int rpmsg_foreach(rpmsg_foreach_t handler, FAR void *arg)
 
   list_for_every_entry(&g_rpmsg, rpmsg, struct rpmsg_s, node)
     {
+      count++;
+      syslog(LOG_EMERG, "RPMSG_FOREACH_ITEM: idx=%d remote=%s local=%s init=%d\n",
+             count,
+             rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
+             rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
+             rpmsg->init);
       ret = handler(rpmsg, arg);
       if (ret < 0)
         {
@@ -976,6 +996,7 @@ int rpmsg_foreach(rpmsg_foreach_t handler, FAR void *arg)
       up_read(&g_rpmsg_lock);
     }
 
+  syslog(LOG_EMERG, "RPMSG_FOREACH_EXIT: count=%d ret=%d\n", count, ret);
   return ret;
 }
 

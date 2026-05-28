@@ -90,6 +90,7 @@ struct rpmsg_virtio_priv_s
 
 static int rpmsg_virtio_wait(FAR struct rpmsg_s *rpmsg, clock_t delay);
 static int rpmsg_virtio_post(FAR struct rpmsg_s *rpmsg);
+static void rpmsg_virtio_panic(FAR struct rpmsg_s *rpmsg);
 static void rpmsg_virtio_dump(FAR struct rpmsg_s *rpmsg, bool verbose);
 static FAR void *rpmsg_virtio_alloc_buf(FAR struct rpmsg_s *rpmsg,
                                         size_t size, size_t align);
@@ -320,6 +321,30 @@ static int rpmsg_virtio_post(FAR struct rpmsg_s *rpmsg)
     }
 
   return OK;
+}
+
+/****************************************************************************
+ * Name: rpmsg_virtio_panic
+ ****************************************************************************/
+
+static void rpmsg_virtio_panic(FAR struct rpmsg_s *rpmsg)
+{
+  FAR struct rpmsg_virtio_priv_s *priv =
+    (FAR struct rpmsg_virtio_priv_s *)rpmsg;
+
+  if (priv->notifytx)
+    {
+      syslog(LOG_EMERG,
+             "RPMSG_VIRTIO_PANIC: remote=%s local=%s svq=%p\n",
+             rpmsg->cpuname, rpmsg->local_cpuname, priv->rvdev.svq);
+      priv->notifytx(priv->rvdev.svq);
+    }
+  else
+    {
+      syslog(LOG_EMERG,
+             "RPMSG_VIRTIO_PANIC: missing notify remote=%s local=%s\n",
+             rpmsg->cpuname, rpmsg->local_cpuname);
+    }
 }
 
 /****************************************************************************
@@ -682,7 +707,7 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
     rpmsg_virtio_wait,
     rpmsg_virtio_post,
     NULL,
-    NULL,
+    rpmsg_virtio_panic,
     rpmsg_virtio_dump,
     NULL,
     rpmsg_virtio_alloc_buf,

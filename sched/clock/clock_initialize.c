@@ -49,8 +49,6 @@
 #  include "clock/clock_timekeeping.h"
 #endif
 
-extern void hal_uart_printf(const char *fmt, ...);
-
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -237,9 +235,7 @@ void clock_initialize(void)
     !defined(CONFIG_SYSTEMTICK_EXTCLK)
   /* Initialize the system timer interrupt */
 
-  hal_uart_printf("xxx clock_initialize: before up_timer_initialize\n");
   up_timer_initialize();
-  hal_uart_printf("xxx clock_initialize: after up_timer_initialize\n");
 #endif
 
 #if defined(CONFIG_RTC)
@@ -247,29 +243,23 @@ void clock_initialize(void)
    * must be deferred until the system has booted.
    */
 
-  hal_uart_printf("xxx clock_initialize: before up_rtc_initialize\n");
   up_rtc_initialize();
-  hal_uart_printf("xxx clock_initialize: after up_rtc_initialize\n");
 
 #if !defined(CONFIG_RTC_EXTERNAL)
   /* Initialize the time value to match the RTC */
 
-  hal_uart_printf("xxx clock_initialize: before clock_inittime\n");
   clock_inittime(NULL);
-  hal_uart_printf("xxx clock_initialize: after clock_inittime\n");
 #endif
 
 #endif
 
 #ifdef CONFIG_SCHED_CPULOAD_SYSCLK
-  hal_uart_printf("xxx clock_initialize: before cpuload_init\n");
   cpuload_init();
-  hal_uart_printf("xxx clock_initialize: after cpuload_init\n");
 #endif
 
   /* perf settup here */
 
-  hal_uart_printf("xxx clock_initialize: skip perf_setup for bringup\n");
+  perf_setup();
 
   sched_trace_end();
 }

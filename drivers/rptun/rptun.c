@@ -40,7 +40,6 @@
 #include <nuttx/mm/mm.h>
 #include <nuttx/nuttx.h>
 #include <nuttx/queue.h>
-#include <nuttx/rpmsg/rpmsg.h>
 #include <nuttx/rpmsg/rpmsg_virtio.h>
 #include <nuttx/rptun/rptun.h>
 #include <nuttx/vhost/vhost.h>
@@ -1046,14 +1045,7 @@ static int rptun_do_ioctl(FAR struct rptun_priv_s *priv, int cmd,
         ret = rptun_dev_wait(priv, arg);
         break;
       default:
-        /* Keep compatibility with the older common_v2 design where the
-         * /dev/rptun/<cpu> node also handled RPMSG ioctls such as ping.
-         */
-        syslog(LOG_EMERG, "RPTUN_TO_RPMSG: cpu=%s cmd=0x%x arg=0x%lx before\n",
-               RPTUN_GET_CPUNAME(priv->dev), cmd, arg);
-        ret = rpmsg_ioctl(RPTUN_GET_CPUNAME(priv->dev), cmd, arg);
-        syslog(LOG_EMERG, "RPTUN_TO_RPMSG: cpu=%s cmd=0x%x ret=%d after\n",
-               RPTUN_GET_CPUNAME(priv->dev), cmd, ret);
+        ret = -ENOTTY;
         break;
     }
 
@@ -1064,12 +1056,6 @@ static int rptun_dev_ioctl(FAR struct file *filep, int cmd,
                            unsigned long arg)
 {
   FAR struct inode *inode = filep->f_inode;
-  FAR struct rptun_priv_s *priv = inode->i_private;
-
-  _err("RPTUN_IOCTL: cpu=%s cmd=0x%x arg=0x%lx state=%d\n",
-           RPTUN_GET_CPUNAME(priv->dev), cmd, arg, priv->rproc.state);
-  rptunerr("RPTUN_IOCTL: cpu=%s cmd=0x%x arg=0x%lx state=%d\n",
-           RPTUN_GET_CPUNAME(priv->dev), cmd, arg, priv->rproc.state);
   return rptun_do_ioctl(inode->i_private, cmd, arg);
 }
 

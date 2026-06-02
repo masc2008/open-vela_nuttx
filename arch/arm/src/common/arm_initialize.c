@@ -28,8 +28,6 @@
 
 #include "arm_internal.h"
 
-extern void hal_uart_printf(const char *fmt, ...);
-
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -64,9 +62,7 @@ void up_initialize(void)
 {
   /* Add any extra memory fragments to the memory manager */
 
-  hal_uart_printf("xxx up_initialize: before arm_addregion\n");
   arm_addregion();
-  hal_uart_printf("xxx up_initialize: after arm_addregion\n");
 
 #ifdef CONFIG_PM
   /* Initialize the power management subsystem.  This MCU-specific function
@@ -75,9 +71,7 @@ void up_initialize(void)
    * with the power management subsystem).
    */
 
-  hal_uart_printf("xxx up_initialize: before arm_pminitialize\n");
   arm_pminitialize();
-  hal_uart_printf("xxx up_initialize: after arm_pminitialize\n");
 #endif
 
 #ifdef CONFIG_ARCH_DMA
@@ -89,53 +83,37 @@ void up_initialize(void)
   if (arm_dma_initialize)
 #endif
     {
-      hal_uart_printf("xxx up_initialize: before arm_dma_initialize\n");
       arm_dma_initialize();
-      hal_uart_printf("xxx up_initialize: after arm_dma_initialize\n");
     }
 #endif
 
   /* Initialize the serial device driver */
 
 #ifdef USE_SERIALDRIVER
-  hal_uart_printf("xxx up_initialize: before arm_serialinit\n");
   arm_serialinit();
-  hal_uart_printf("xxx up_initialize: after arm_serialinit\n");
 #endif
 
   /* Initialize the network */
 
-  hal_uart_printf("xxx up_initialize: before arm_netinitialize\n");
   arm_netinitialize();
-  hal_uart_printf("xxx up_initialize: after arm_netinitialize\n");
 
 #if defined(CONFIG_USBDEV) || defined(CONFIG_USBHOST)
   /* Initialize USB -- device and/or host */
 
-  hal_uart_printf("xxx up_initialize: before arm_usbinitialize\n");
   arm_usbinitialize();
-  hal_uart_printf("xxx up_initialize: after arm_usbinitialize\n");
 #endif
 
 #ifdef CONFIG_ARM_COREDUMP_REGION
-  hal_uart_printf("xxx up_initialize: before arm_coredump_add_region\n");
   arm_coredump_add_region();
-  hal_uart_printf("xxx up_initialize: after arm_coredump_add_region\n");
 #endif
 
   /* Initialize the L2 cache if present and selected */
 
-  hal_uart_printf("xxx up_initialize: before arm_l2ccinitialize\n");
   arm_l2ccinitialize();
-  hal_uart_printf("xxx up_initialize: after arm_l2ccinitialize\n");
 
 #ifdef CONFIG_ARCH_HAVE_DEBUG
-  hal_uart_printf("xxx up_initialize: before arm_enable_dbgmonitor\n");
   arm_enable_dbgmonitor();
-  hal_uart_printf("xxx up_initialize: after arm_enable_dbgmonitor\n");
 #endif
 
-  hal_uart_printf("xxx up_initialize: before board_autoled_on\n");
   board_autoled_on(LED_IRQSENABLED);
-  hal_uart_printf("xxx up_initialize: after board_autoled_on\n");
 }

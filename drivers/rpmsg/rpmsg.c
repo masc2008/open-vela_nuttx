@@ -228,21 +228,9 @@ static int rpmsg_ioctl_foreach_cb(FAR struct rpmsg_s *rpmsg, FAR void *arg)
   FAR struct rpmsg_ioctl_s *info = (FAR struct rpmsg_ioctl_s *)arg;
   int ret = OK;
 
-  syslog(LOG_EMERG, "RPMSG_IOCTL_FOREACH: target=%s current=%s local=%s cmd=0x%x\n",
-         info->cpuname ? info->cpuname : "<all>",
-         rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
-         rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
-         info->cmd);
-
   if (!info->cpuname || !strcmp(rpmsg->cpuname, info->cpuname))
     {
-      syslog(LOG_EMERG, "RPMSG_IOCTL_MATCH: remote=%s local=%s cmd=0x%x\n",
-             rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
-             rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
-             info->cmd);
       ret = rpmsg_dev_ioctl_(rpmsg, info->cmd, info->arg);
-      syslog(LOG_EMERG, "RPMSG_IOCTL_RET: remote=%s cmd=0x%x ret=%d\n",
-             rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>", info->cmd, ret);
     }
 
   return ret;
@@ -746,10 +734,6 @@ void rpmsg_ns_unbind(FAR struct rpmsg_device *rdev,
 
 void rpmsg_device_created(FAR struct rpmsg_s *rpmsg)
 {
-  syslog(LOG_EMERG, "RPMSG_DEVICE_CREATED: remote=%s local=%s init=%d\n",
-         rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
-         rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
-         rpmsg->init);
   FAR struct rpmsg_device *rdev = rpmsg_get_rdev_by_rpmsg(rpmsg);
   FAR struct rpmsg_cb_s *tmp;
   FAR struct rpmsg_cb_s *cb;
@@ -779,10 +763,6 @@ void rpmsg_device_created(FAR struct rpmsg_s *rpmsg)
 
 void rpmsg_device_destory(FAR struct rpmsg_s *rpmsg)
 {
-  syslog(LOG_EMERG, "RPMSG_DEVICE_DESTROY: remote=%s local=%s init=%d\n",
-         rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
-         rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
-         rpmsg->init);
   FAR struct rpmsg_device *rdev = rpmsg_get_rdev_by_rpmsg(rpmsg);
   FAR struct rpmsg_bind_s *bind_tmp;
   FAR struct rpmsg_bind_s *bind;
@@ -883,12 +863,6 @@ int rpmsg_register(FAR const char *path, FAR struct rpmsg_s *rpmsg,
               list_add_tail(&g_rpmsg, &rpmsg->node);
               up_write(&g_rpmsg_lock);
 
-              syslog(LOG_EMERG, "RPMSG_REGISTER: path=%s remote=%s local=%s nrx=%u\n",
-                     path,
-                     rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
-                     rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
-                     nrx);
-
               rpmsg->nbreboot.notifier_call = rpmsg_reboot_notifier;
               register_reboot_notifier(&rpmsg->nbreboot);
             }
@@ -911,11 +885,6 @@ int rpmsg_register(FAR const char *path, FAR struct rpmsg_s *rpmsg,
 
 void rpmsg_unregister(FAR const char *path, FAR struct rpmsg_s *rpmsg)
 {
-  syslog(LOG_EMERG, "RPMSG_UNREGISTER: path=%s remote=%s local=%s init=%d\n",
-         path,
-         rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
-         rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
-         rpmsg->init);
   unregister_reboot_notifier(&rpmsg->nbreboot);
 
   down_write(&g_rpmsg_lock);
@@ -949,24 +918,15 @@ int rpmsg_ioctl(FAR const char *cpuname, int cmd, unsigned long arg)
 {
   struct rpmsg_ioctl_s info;
 
-  syslog(LOG_EMERG, "RPMSG_IOCTL_ENTRY: target=%s cmd=0x%x arg=0x%lx\n",
-         cpuname ? cpuname : "<all>", cmd, arg);
-
   info.cpuname = cpuname;
   info.cmd = cmd;
   info.arg = arg;
 
-  {
-    int ret = rpmsg_foreach(rpmsg_ioctl_foreach_cb, &info);
-    syslog(LOG_EMERG, "RPMSG_IOCTL_EXIT: target=%s cmd=0x%x ret=%d\n",
-           cpuname ? cpuname : "<all>", cmd, ret);
-    return ret;
-  }
+  return rpmsg_foreach(rpmsg_ioctl_foreach_cb, &info);
 }
 
 int rpmsg_foreach(rpmsg_foreach_t handler, FAR void *arg)
 {
-  int count = 0;
   bool needlock = !up_interrupt_context() && !sched_idletask();
   FAR struct rpmsg_s *rpmsg;
   int ret = OK;
@@ -978,12 +938,6 @@ int rpmsg_foreach(rpmsg_foreach_t handler, FAR void *arg)
 
   list_for_every_entry(&g_rpmsg, rpmsg, struct rpmsg_s, node)
     {
-      count++;
-      syslog(LOG_EMERG, "RPMSG_FOREACH_ITEM: idx=%d remote=%s local=%s init=%d\n",
-             count,
-             rpmsg->cpuname[0] ? rpmsg->cpuname : "<none>",
-             rpmsg->local_cpuname[0] ? rpmsg->local_cpuname : CONFIG_RPMSG_LOCAL_CPUNAME,
-             rpmsg->init);
       ret = handler(rpmsg, arg);
       if (ret < 0)
         {
@@ -996,7 +950,6 @@ int rpmsg_foreach(rpmsg_foreach_t handler, FAR void *arg)
       up_read(&g_rpmsg_lock);
     }
 
-  syslog(LOG_EMERG, "RPMSG_FOREACH_EXIT: count=%d ret=%d\n", count, ret);
   return ret;
 }
 

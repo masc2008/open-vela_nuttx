@@ -37,10 +37,6 @@ if(CONFIG_RPMSG)
     list(APPEND SRCS rpmsg_ping.c)
   endif()
 
-  if(CONFIG_RPMSG_WAKELOCK)
-    list(APPEND SRCS rpmsg_wakelock.c)
-  endif()
-
   if(CONFIG_RPMSG_PORT)
     list(APPEND SRCS rpmsg_port.c)
   endif()
@@ -67,10 +63,6 @@ if(CONFIG_RPMSG)
 
   if(CONFIG_RPMSG_TEST)
     list(APPEND SRCS rpmsg_test.c)
-  endif()
-
-  if(CONFIG_RPMSG_WAKELOCK)
-    list(APPEND SRCS rpmsg_wakelock.c)
   endif()
 
   if(CONFIG_RPMSG_PROCFS)

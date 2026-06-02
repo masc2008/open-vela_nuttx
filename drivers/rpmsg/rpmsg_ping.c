@@ -231,7 +231,6 @@ int rpmsg_ping(FAR struct rpmsg_ping_dev_s *dev,
 
   if (!dev || !ping || ping->times <= 0)
     {
-      syslog(LOG_EMERG, "RPMSG_PING: invalid args dev=%p ping=%p times=%d\n", dev, ping, ping ? ping->times : -1);
       return -EINVAL;
     }
 
@@ -244,10 +243,6 @@ int rpmsg_ping(FAR struct rpmsg_ping_dev_s *dev,
       ept = &dev->ept;
     }
 
-  syslog(LOG_EMERG, "RPMSG_PING: start dev=%p ept=%p times=%d len=%d cmd=0x%x sleep=%d local=%s remote=%s\n",
-         dev, ept, ping->times, ping->len, ping->cmd, ping->sleep,
-         rpmsg_get_local_cpuname(ept->rdev), rpmsg_get_cpuname(ept->rdev));
-
   for (i = 0; i < ping->times; i++)
     {
       clock_t tm = perf_gettime();
@@ -255,13 +250,8 @@ int rpmsg_ping(FAR struct rpmsg_ping_dev_s *dev,
       send_len = rpmsg_ping_once(ept, ping->len, ping->cmd, &buf_len, i);
       if (send_len < 0)
         {
-          syslog(LOG_EMERG, "RPMSG_PING: iter=%d failed ret=%d remote=%s\n",
-                 i, send_len, rpmsg_get_cpuname(ept->rdev));
           return send_len;
         }
-
-      syslog(LOG_EMERG, "RPMSG_PING: iter=%d ok send_len=%d buf_len=%" PRIu32 " remote=%s\n",
-             i, send_len, buf_len, rpmsg_get_cpuname(ept->rdev));
 
       tm     = perf_gettime() - tm;
       min    = MIN(min, tm);

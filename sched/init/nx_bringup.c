@@ -62,8 +62,6 @@
 #  include <sys/mount.h>
 #endif
 
-extern void hal_uart_printf(const char *fmt, ...);
-
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -322,9 +320,7 @@ static inline void nx_start_application(void)
   int ret;
 
 #ifdef CONFIG_ETC_ROMFS
-  hal_uart_printf("xxx nx_start_application: before nx_romfsetc\n");
   nx_romfsetc();
-  hal_uart_printf("xxx nx_start_application: after nx_romfsetc\n");
 #endif
 
 #ifdef CONFIG_BOARD_LATE_INITIALIZE
@@ -347,9 +343,7 @@ static inline void nx_start_application(void)
 
   /* Call C++ static constructors */
 
-  hal_uart_printf("xxx nx_start_application: before lib_cxx_initialize\n");
   lib_cxx_initialize();
-  hal_uart_printf("xxx nx_start_application: after lib_cxx_initialize\n");
 
 #if defined(CONFIG_INIT_ENTRY)
 
@@ -367,12 +361,9 @@ static inline void nx_start_application(void)
                    USERSPACE->us_entrypoint,
                    NULL, &attr, argv, NULL);
 #  else
-  hal_uart_printf("xxx nx_start_application: before task_spawn %s\n",
-                  CONFIG_INIT_ENTRYNAME);
   ret = task_spawn(CONFIG_INIT_ENTRYNAME,
                    CONFIG_INIT_ENTRYPOINT,
                    NULL, &attr, argv, NULL);
-  hal_uart_printf("xxx nx_start_application: after task_spawn ret:%d\n", ret);
 #  endif
 #elif defined(CONFIG_INIT_FILE)
 
@@ -509,7 +500,6 @@ static inline void nx_create_initthread(void)
 
 void nx_bringup(void)
 {
-  hal_uart_printf("xxx nx_bringup: entry\n");
   sched_trace_begin();
 
 #ifndef CONFIG_DISABLE_ENVIRON
@@ -544,18 +534,14 @@ void nx_bringup(void)
    * half" and will perform misc garbage clean-up.
    */
 
-  hal_uart_printf("xxx nx_bringup: before nx_workqueues\n");
   nx_workqueues();
-  hal_uart_printf("xxx nx_bringup: after nx_workqueues\n");
 
   /* Once the operating system has been initialized, the system must be
    * started by spawning the user initialization thread of execution.  This
    * will be the first user-mode thread.
    */
 
-  hal_uart_printf("xxx nx_bringup: before nx_create_initthread\n");
   nx_create_initthread();
-  hal_uart_printf("xxx nx_bringup: after nx_create_initthread\n");
 
 #if !defined(CONFIG_DISABLE_ENVIRON) && (defined(CONFIG_PATH_INITIAL) || \
      defined(CONFIG_LDPATH_INITIAL))

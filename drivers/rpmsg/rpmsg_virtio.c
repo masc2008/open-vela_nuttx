@@ -90,7 +90,6 @@ struct rpmsg_virtio_priv_s
 
 static int rpmsg_virtio_wait(FAR struct rpmsg_s *rpmsg, clock_t delay);
 static int rpmsg_virtio_post(FAR struct rpmsg_s *rpmsg);
-static void rpmsg_virtio_panic(FAR struct rpmsg_s *rpmsg);
 static void rpmsg_virtio_dump(FAR struct rpmsg_s *rpmsg, bool verbose);
 static FAR void *rpmsg_virtio_alloc_buf(FAR struct rpmsg_s *rpmsg,
                                         size_t size, size_t align);
@@ -321,30 +320,6 @@ static int rpmsg_virtio_post(FAR struct rpmsg_s *rpmsg)
     }
 
   return OK;
-}
-
-/****************************************************************************
- * Name: rpmsg_virtio_panic
- ****************************************************************************/
-
-static void rpmsg_virtio_panic(FAR struct rpmsg_s *rpmsg)
-{
-  FAR struct rpmsg_virtio_priv_s *priv =
-    (FAR struct rpmsg_virtio_priv_s *)rpmsg;
-
-  if (priv->notifytx)
-    {
-      syslog(LOG_EMERG,
-             "RPMSG_VIRTIO_PANIC: remote=%s local=%s svq=%p\n",
-             rpmsg->cpuname, rpmsg->local_cpuname, priv->rvdev.svq);
-      priv->notifytx(priv->rvdev.svq);
-    }
-  else
-    {
-      syslog(LOG_EMERG,
-             "RPMSG_VIRTIO_PANIC: missing notify remote=%s local=%s\n",
-             rpmsg->cpuname, rpmsg->local_cpuname);
-    }
 }
 
 /****************************************************************************
@@ -707,7 +682,7 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
     rpmsg_virtio_wait,
     rpmsg_virtio_post,
     NULL,
-    rpmsg_virtio_panic,
+    NULL,
     rpmsg_virtio_dump,
     NULL,
     rpmsg_virtio_alloc_buf,
@@ -796,16 +771,6 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
                                txvr->info.align);
           shmbuf_va0 = (FAR char *)rxvr->info.vaddr + vring_sz0;
           shmbuf_va1 = (FAR char *)txvr->info.vaddr + vring_sz1;
-          syslog(LOG_EMERG,
-                 "RPMSG_VIRTIO_POOL: fallback rx_vring=%p tx_vring=%p rx_buf=%p tx_buf=%p rx_sz=%zu tx_sz=%zu\n",
-                 rxvr->info.vaddr, txvr->info.vaddr, shmbuf_va0, shmbuf_va1,
-                 shbufsz0, shbufsz1);
-        }
-      else
-        {
-          syslog(LOG_EMERG,
-                 "RPMSG_VIRTIO_POOL: bufaddr rx_buf=%p tx_buf=%p rx_sz=%zu tx_sz=%zu\n",
-                 shmbuf_va0, shmbuf_va1, shbufsz0, shbufsz1);
         }
 
       rpmsg_virtio_init_shm_pool(&priv->pool[0], shmbuf_va0, shbufsz0);
@@ -822,17 +787,12 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
   /* Register the rpmsg to rpmsg framework */
 
   snprintf(name, sizeof(name), "/dev/rpmsg/%s", priv->rpmsg.cpuname);
-  syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: register name=%s remote=%s local=%s nrx=%u role=%d\n",
-         name, priv->rpmsg.cpuname, priv->rpmsg.local_cpuname, nrx, vdev->role);
   ret = rpmsg_register(name, &priv->rpmsg, &g_rpmsg_virtio_ops, nrx);
-  syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: rpmsg_register ret=%d name=%s\n", ret, name);
   if (ret >= 0)
     {
-      syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: before rpmsg_init_vdev name=%s\n", name);
       ret = rpmsg_init_vdev_with_config(&priv->rvdev, vdev, rpmsg_ns_bind,
                                         metal_io_get_region(),
                                         priv->pool, &config);
-      syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: after rpmsg_init_vdev ret=%d name=%s\n", ret, name);
       if (ret >= 0)
         {
           priv->notifytx = priv->rvdev.svq->notify;
@@ -847,7 +807,6 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
 
           /* Broadcast device_created to all registers */
 
-          syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: device_created name=%s\n", name);
           rpmsg_device_created(&priv->rpmsg);
 
           /* Open tx buffer return callback */
@@ -856,7 +815,6 @@ static void rpmsg_virtio_start_worker(FAR void *arg)
         }
       else
         {
-          syslog(LOG_EMERG, "RPMSG_VIRTIO_PROBE: init_vdev failed ret=%d name=%s\n", ret, name);
           rpmsgerr("rpmsg_init_vdev failed, ret=%d\n", ret);
           rpmsg_unregister(name, &priv->rpmsg);
         }
@@ -981,8 +939,6 @@ void rpmsg_virtio_remove(FAR struct virtio_device *vdev)
   /* Unregister the rpmsg */
 
   snprintf(name, sizeof(name), "/dev/rpmsg/%s", priv->rpmsg.cpuname);
-  syslog(LOG_EMERG, "RPMSG_VIRTIO_REMOVE: unregister name=%s remote=%s local=%s init=%d role=%d\n",
-         name, priv->rpmsg.cpuname, priv->rpmsg.local_cpuname, priv->rpmsg.init, vdev->role);
   rpmsg_unregister(name, &priv->rpmsg);
 
   /* Disable tx buffer return callback */

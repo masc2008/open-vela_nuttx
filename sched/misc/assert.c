@@ -887,7 +887,6 @@ static void reset_board(void)
  * Name: _assert
  ****************************************************************************/
 
-extern void hal_uart_printf(const char *fmt, ...);
 void _assert(FAR const char *filename, int linenum,
              FAR const char *msg, FAR void *regs, bool irq)
 {
@@ -897,10 +896,6 @@ void _assert(FAR const char *filename, int linenum,
   irqstate_t flags = 0; /* Suppress GCC warning */
 
   static DEFINE_PER_CPU_BMP(spinlock_t, g_assert_lock) = SP_UNLOCKED;
-
-    hal_uart_printf("\nbbbbbbbbbaaaaaaaaayyyyyyyyyyyyyyyy\n");
-  _err("masc %d xxxxxx\n", __LINE__);
-    hal_uart_printf("\naaaaaaaaayyyyyyyyyyyyyyyy\n");
 #define g_assert_lock this_cpu_var_bmp(g_assert_lock)
 
   /* Save registers to this point */

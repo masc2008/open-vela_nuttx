@@ -1534,6 +1534,7 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
       else
         {
           int ret;
+          rndis_block_rx(priv);
 
           DEBUGASSERT(work_available(&priv->rxwork));
           ret = work_queue(ETHWORK, &priv->rxwork, rndis_rxdispatch,
@@ -1541,7 +1542,6 @@ static inline int rndis_recvpacket(FAR struct rndis_dev_s *priv,
           DEBUGASSERT(ret == 0);
           UNUSED(ret);
 
-          rndis_block_rx(priv);
           priv->rndis_host_tx_count++;
           return -EBUSY;
         }

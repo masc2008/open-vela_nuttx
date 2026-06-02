@@ -2323,7 +2323,9 @@ static int usbmsc_cmdreadstate(FAR struct usbmsc_dev_s *priv)
           /* Yes.. read the next sector */
 
 #ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
-          nread = USBMSC_DRVR_READ(lun, priv->iobuffer, priv->sector, priv->u.xfrlen);
+          uint32_t max_sectors = priv->iosize / lun->sectorsize;
+          uint32_t read_sectors = MIN(priv->u.xfrlen, max_sectors);
+          nread = USBMSC_DRVR_READ(lun, priv->iobuffer, priv->sector, read_sectors);
 #else
           nread = USBMSC_DRVR_READ(lun, priv->iobuffer, priv->sector, 1);
 #endif
@@ -2511,20 +2513,18 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
        * transferred to the block driver OR all of the request data has been
        * transferred.
        */
+#ifdef CONFIG_USBMSC_WRMULTIPLE
 #ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
       if(priv->nsectbytes == 0)
         {
-#ifdef CONFIG_USBMSC_WRMULTIPLE
           priv->cache_buffer = kmm_malloc(lun->sectorsize * CONFIG_USBMSC_NWRREQS);
-#else
-          priv->cache_buffer = kmm_malloc(lun->sectorsize);
-#endif
           if (!priv->cache_buffer)
             {
               usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_ALLOCIOBUFFER), 0);
               goto errout;
             }
         }
+#endif
 #endif
       while (priv->nreqbytes > 0 && priv->u.xfrlen > 0)
         {
@@ -2573,7 +2573,7 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
               (priv->nsectbytes >= lun->sectorsize * CONFIG_USBMSC_NWRREQS))
             {
 #ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
-              nwritten = usbmsc_cache_write(priv,priv->cache_buffer,nrbufs);
+              nwritten = usbmsc_cache_write(priv, priv->cache_buffer, nrbufs);
 #else
               /* Yes.. Write next sectors */
 
@@ -2597,14 +2597,10 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
 #else
           if ((priv->nsectbytes >= lun->sectorsize))
             {
-#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
-              nwritten = usbmsc_cache_write(priv,cache_buffer,1);
-#else
               /* Yes.. Write the next sector */
 
               nwritten = USBMSC_DRVR_WRITE(lun, priv->iobuffer,
                                            priv->sector, 1);
-#endif
               if (nwritten < 0)
                 {
                   usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_CMDWRITEWRITEFAIL),
@@ -2655,7 +2651,11 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
 
       /* Did the host decide to stop early? */
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+      if (xfrd < req->len)
+#else
       if (xfrd != priv->epbulkout->maxpacket)
+#endif
         {
           priv->shortpacket = 1;
           goto errout;
@@ -2663,6 +2663,9 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
     }
 
 errout:
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+  priv->cache_buffer = NULL;
+#endif
   usbtrace(TRACE_CLASSSTATE(USBMSC_CLASSSTATE_CMDWRITECMDFINISH),
            priv->u.xfrlen);
   priv->thstate  = USBMSC_STATE_CMDFINISH;
@@ -3212,7 +3215,7 @@ static int usbmsc_cache_write(FAR struct usbmsc_dev_s *priv, uint8_t *buffer, ui
   FAR struct usbmsc_lun_s *lun = priv->lun;
   struct usbmsc_wrmsg_s msg = {0};
   mqd_t wrmsgq;
-  int ret;
+  int ret = 0;
 
   msg.buffer = buffer;
   msg.sector = priv->sector;
@@ -3232,12 +3235,15 @@ static int usbmsc_cache_write(FAR struct usbmsc_dev_s *priv, uint8_t *buffer, ui
       if(ret < 0)
         {
           uerr("cache write wait sem error!!!\n");
-          kmm_free(msg.buffer);
           goto error_out;
         }
     }
   ret = mq_send(wrmsgq, (const char *)&msg, sizeof(struct usbmsc_wrmsg_s), CONFIG_USBMSC_SCSI_PRIO);
 error_out:
+  if (ret < 0)
+    {
+      kmm_free(msg.buffer);
+    }
   mq_close(wrmsgq);
   return ret;
 }

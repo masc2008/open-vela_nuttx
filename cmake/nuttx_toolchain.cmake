@@ -89,14 +89,32 @@ if(NOT NUTTX_TOOLCHAIN_PREPROCESS_DEFINED)
       TARGET_FILE
       ARGN
       ${ARGN})
+
+    set(depfile_args)
+    set(preprocess_depflags)
+
+    if((CMAKE_GENERATOR MATCHES "Ninja|Makefiles")
+       AND (CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES
+                                                  "Clang"))
+      set(preprocess_depfile ${TARGET_FILE}.d)
+      list(
+        APPEND
+        preprocess_depflags
+        -MMD
+        -MT
+        ${TARGET_FILE}
+        -MF
+        ${preprocess_depfile})
+      list(APPEND depfile_args DEPFILE ${preprocess_depfile})
+    endif()
+
     add_custom_command(
       OUTPUT ${TARGET_FILE}
       COMMAND
-        ${PREPROCESS}
-        $<GENEX_EVAL:$<TARGET_PROPERTY:nuttx_global,NUTTX_CPP_COMPILE_OPTIONS>>
+        ${PREPROCESS} ${DEFINES} ${preprocess_depflags}
         -I${CMAKE_BINARY_DIR}/include -I${NUTTX_DIR}/include
         -I${NUTTX_CHIP_ABS_DIR} ${SOURCE_FILE} > ${TARGET_FILE}
-      DEPENDS ${SOURCE_FILE} ${DEPENDS}
+      DEPENDS ${SOURCE_FILE} ${DEPENDS} ${depfile_args}
       COMMAND_EXPAND_LISTS)
 
   endfunction()

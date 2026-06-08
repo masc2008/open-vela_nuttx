@@ -29,6 +29,7 @@
 #include <stdint.h>
 
 #include <nuttx/compiler.h>
+#include <nuttx/fs/ioctl.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -119,6 +120,33 @@ begin_packed_struct struct vhost_blk_config_s
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
+
+struct virtio_device;
+
+/* IOCTL commands exposed by the virtio-blk block inode for upper-layer
+ * coordinators (e.g. drivers/dual-blk):
+ *
+ *   VIRTIO_BLK_IOC_GET_DEVICE     out: FAR uintptr_t *
+ *      Returns the bound 'struct virtio_device *' so the caller can use
+ *      virtio_get_status() etc. directly without further ioctls.
+ *
+ *   VIRTIO_BLK_IOC_SUBSCRIBE_IRQ  in:  FAR struct virtio_blk_irq_sub_s *
+ *      Registers (cb, arg). cb is invoked from virtio_blk_done() in IRQ
+ *      context after the vring is drained. cb=NULL unsubscribes. Only one
+ *      subscriber per device.
+ */
+
+#define VIRTIO_BLK_IOC_GET_DEVICE       _BIOC(0x0001)
+#define VIRTIO_BLK_IOC_SUBSCRIBE_IRQ    _BIOC(0x0002)
+
+typedef void (*virtio_blk_irq_cb_t)(FAR void *arg,
+                                    FAR struct virtio_device *vdev);
+
+struct virtio_blk_irq_sub_s
+{
+  virtio_blk_irq_cb_t cb;    /* NULL = unsubscribe */
+  FAR void           *arg;   /* opaque cookie for cb */
+};
 
 #ifdef __cplusplus
 #define EXTERN extern "C"

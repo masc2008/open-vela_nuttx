@@ -1071,7 +1071,7 @@ static uint32_t psock_send_eventhandler(FAR struct net_driver_s *dev,
           if (sndlen > iob_navail(false) * CONFIG_IOB_BUFSIZE)
             {
               nwarn("Running low on iobs, limiting packet size\n");
-              sndlen = CONFIG_IOB_BUFSIZE;
+              sndlen = MIN(CONFIG_IOB_BUFSIZE, sndlen);
             }
 
           ninfo("SEND: wrb=%p seq=%" PRIu32 " pktlen=%u sent=%u sndlen=%zu "

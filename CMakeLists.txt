@@ -350,9 +350,12 @@ endif()
 # Copy board defconfig into main directory and expand TODO: do also for changes
 # in board/config (by comparing stored defconfig to specified one)
 
-if(NOT EXISTS ${CMAKE_BINARY_DIR}/.config OR NOT "${NUTTX_DEFCONFIG}" STREQUAL
-                                             "${NUTTX_DEFCONFIG_SAVED}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+             ${NUTTX_DEFCONFIG})
 
+if(NOT EXISTS ${CMAKE_BINARY_DIR}/.config OR NOT "${NUTTX_DEFCONFIG}" STREQUAL
+                                             "${NUTTX_DEFCONFIG_SAVED}"
+   OR ${NUTTX_DEFCONFIG} IS_NEWER_THAN ${CMAKE_BINARY_DIR}/defconfig)
   message(STATUS "Initializing NuttX")
   configure_file(${NUTTX_DEFCONFIG} defconfig COPYONLY)
   configure_file(${NUTTX_DEFCONFIG} .config.compressed COPYONLY)

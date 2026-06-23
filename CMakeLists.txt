@@ -353,9 +353,16 @@ endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
              ${NUTTX_DEFCONFIG})
 
+execute_process(
+  COMMAND ${CMAKE_COMMAND} -E compare_files ${NUTTX_DEFCONFIG}
+          ${CMAKE_BINARY_DIR}/defconfig
+  RESULT_VARIABLE _defconfig_changed
+  OUTPUT_QUIET ERROR_QUIET)
+
 if(NOT EXISTS ${CMAKE_BINARY_DIR}/.config OR NOT "${NUTTX_DEFCONFIG}" STREQUAL
                                              "${NUTTX_DEFCONFIG_SAVED}"
-   OR ${NUTTX_DEFCONFIG} IS_NEWER_THAN ${CMAKE_BINARY_DIR}/defconfig)
+   OR NOT _defconfig_changed EQUAL 0)
+
   message(STATUS "Initializing NuttX")
   configure_file(${NUTTX_DEFCONFIG} defconfig COPYONLY)
   configure_file(${NUTTX_DEFCONFIG} .config.compressed COPYONLY)
@@ -372,6 +379,9 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/.config OR NOT "${NUTTX_DEFCONFIG}" STREQUAL
   # store original expanded .config
   configure_file(${CMAKE_BINARY_DIR}/.config ${CMAKE_BINARY_DIR}/.config.orig
                  COPYONLY)
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/.config
+            ${CMAKE_BINARY_DIR}/.config.prev)
 
   # We define host
   nuttx_sethost()

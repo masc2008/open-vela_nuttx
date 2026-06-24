@@ -364,6 +364,8 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/.config OR NOT "${NUTTX_DEFCONFIG}" STREQUAL
    OR NOT _defconfig_changed EQUAL 0)
 
   message(STATUS "Initializing NuttX")
+  file(REMOVE ${CMAKE_BINARY_DIR}/.config.prev)
+  file(REMOVE ${CMAKE_BINARY_DIR}/include/nuttx/config.h)
   configure_file(${NUTTX_DEFCONFIG} defconfig COPYONLY)
   configure_file(${NUTTX_DEFCONFIG} .config.compressed COPYONLY)
 
@@ -379,9 +381,6 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/.config OR NOT "${NUTTX_DEFCONFIG}" STREQUAL
   # store original expanded .config
   configure_file(${CMAKE_BINARY_DIR}/.config ${CMAKE_BINARY_DIR}/.config.orig
                  COPYONLY)
-  execute_process(
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/.config
-            ${CMAKE_BINARY_DIR}/.config.prev)
 
   # We define host
   nuttx_sethost()
@@ -410,6 +409,10 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/.config OR NOT "${NUTTX_DEFCONFIG}" STREQUAL
   message(STATUS "  Board:  ${NUTTX_BOARD}")
   message(STATUS "  Config: ${NUTTX_CONFIG}")
   message(STATUS "  Appdir: ${NUTTX_APPS_DIR}")
+else()
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/.config
+            ${CMAKE_BINARY_DIR}/.config.prev)
 endif()
 
 # declare global custom targets at very beginning `nuttx_global` is used to hold

@@ -1019,11 +1019,17 @@ static void net_rpmsg_drv_ns_bind(FAR struct rpmsg_device *rdev,
   {
     struct in_addr addr;
 
-    addr.s_addr = HTONL(0xc0a82c01);
+    addr.s_addr = HTONL(0xc0a82d03);
     netlib_set_ipv4addr(devname, &addr);
 
     addr.s_addr = HTONL(0xffffff00);
     netlib_set_ipv4netmask(devname, &addr);
+
+    addr.s_addr = HTONL(0xc0a82d01);
+    netlib_set_dripv4addr(devname, &addr);
+
+    addr.s_addr = HTONL(0x72727272);
+    netlib_set_ipv4dnsaddr(&addr);
   }
 #endif
 }
@@ -1098,17 +1104,11 @@ net_rpmsg_drv_init(FAR const char *cpuname, FAR const char *devname,
   {
     struct in_addr addr;
 
-    addr.s_addr = HTONL(0xc0a82c03);
+    addr.s_addr = HTONL(0xc0a82d01);
     netlib_set_ipv4addr(devname, &addr);
 
     addr.s_addr = HTONL(0xffffff00);
     netlib_set_ipv4netmask(devname, &addr);
-
-    addr.s_addr = HTONL(0xc0a82c01);
-    netlib_set_dripv4addr(devname, &addr);
-
-    addr.s_addr = HTONL(0x72727272);
-    netlib_set_ipv4dnsaddr(&addr);
   }
 #endif
   return dev;

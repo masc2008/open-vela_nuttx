@@ -202,7 +202,6 @@ config SIM_IMAGEPATH_AS_CWD
 choice
 	prompt "Simulated Network Interface"
 	default SIM_NETDEV
-	depends on NET
 	optional
 
 config SIM_NETDEV

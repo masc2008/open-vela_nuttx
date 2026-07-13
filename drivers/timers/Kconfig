@@ -155,14 +155,14 @@ config ONESHOT
 if ONESHOT
 
 config ONESHOT_COUNT
-	bool "Oneshot Count"
+	bool
 	default n
 	---help---
 		This option enables the oneshot implementation to be based on the
 		new clock device driver interfaces.
 
 config ONESHOT_FAST_DIVISION
-	bool " Convert Clock Count Using Invariant-divisor Division"
+	bool # Convert Clock Count Using Invariant-divisor Division
 	default n
 	depends on ONESHOT_COUNT
 	---help---

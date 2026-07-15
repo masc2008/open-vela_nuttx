@@ -1008,6 +1008,36 @@ config USBMSC_EPBULKIN
 
 endif
 
+config USBMSC_WRITE_CACHE_ENABLE
+	bool "Enable write cache support for USB MSC devices"
+	default n
+	---help---
+		Adding a write cache mechanism enables the host write request reception
+		and the actual write operation to be executed asynchronously,
+		with semaphores used internally to ensure the timing of read and write data.
+
+if USBMSC_WRITE_CACHE_ENABLE
+
+config USBMSC_WRITE_CACHE_QUEUE_SIZE
+	int "USBMSC write cache queue size"
+	default 4
+	---help---
+		The queue size of the USBMSC write cache to improve write throughput.
+
+config USBMSC_WRITE_CACHE_STACKSIZE
+	int "USBMSC write cache thread stack size"
+	default DEFAULT_TASK_STACKSIZE
+	---help---
+		Stack size used with the write cache thread.  The default value
+		is not tuned.
+
+endif
+
+if !USBMSC_WRITE_CACHE_ENABLE
+
+# If USBMSC_WRITE_CACHE_ENABLE
+# USBMSC_NWRREQS & USBMSC_NRDREQS cannot be configured with fixed values
+
 config USBMSC_NWRREQS
 	int "The number of write requests that can be in flight"
 	default 4
@@ -1019,6 +1049,8 @@ config USBMSC_NRDREQS
 	default 4
 	---help---
 		The number of write/read requests that can be in flight
+
+endif
 
 config USBMSC_WRMULTIPLE
 	bool "Write multiple blocks at once if possible"

@@ -58,6 +58,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
+#include <fcntl.h>
 
 #include <nuttx/irq.h>
 #include <nuttx/kmalloc.h>
@@ -274,8 +275,13 @@ static int usbmsc_bind(FAR struct usbdevclass_driver_s *driver,
       else
 #endif
         {
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+          reqcontainer->req = usbdev_allocreq(priv->epbulkout,
+                                              CONFIG_USBDEV_RXSIZE);
+#else
           reqcontainer->req = usbdev_allocreq(priv->epbulkout,
                                               CONFIG_USBMSC_BULKOUTREQLEN);
+#endif
         }
 
       if (reqcontainer->req == NULL)
@@ -1309,6 +1315,24 @@ int usbmsc_configure(unsigned int nluns, FAR void **handle)
   nxsem_init(&priv->thwaitsem, 0, 0);
   spin_lock_init(&priv->spinlock);
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+  nxmutex_init(&priv->wrthlock);
+  nxsem_init(&priv->wrthsynch, 0, 0);
+  nxsem_init(&priv->wrthwaitsem, 0, 1);
+
+  struct mq_attr attr;
+  attr.mq_maxmsg  = CONFIG_USBMSC_WRITE_CACHE_QUEUE_SIZE;
+  attr.mq_msgsize = sizeof(struct usbmsc_wrmsg_s);
+  attr.mq_curmsgs = 0;
+  attr.mq_flags = 0;
+
+  priv->wrmsgq = mq_open(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME, O_CREAT | O_RDWR, 0644, &attr);
+  if (priv->wrmsgq == (mqd_t)-1)
+    {
+      ret =  -errno;
+      goto errout;
+    }
+#endif
   sq_init(&priv->wrreqlist);
   priv->nluns = nluns;
 
@@ -1650,6 +1674,13 @@ int usbmsc_exportluns(FAR void *handle)
   drvr = &alloc->drvr;
 #endif
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+  ret = usbmsc_cache_initialize(priv);
+  if (ret < 0)
+    {
+      return ret;
+    }
+#endif
   /* Start the worker thread
    *
    * REVISIT:  g_usbmsc_handoff is a global and, hence, really requires
@@ -1844,6 +1875,33 @@ void usbmsc_uninitialize(FAR void *handle)
 
   priv->thpid = 0;
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+  if (priv->wrthstate != USBMSC_WRSTATE_NOTSTARTED)
+    {
+      /* The thread was started.. Is it still running? */
+      if (priv->wrthstate != USBMSC_WRSTATE_TERMINATED)
+        {
+          /* Yes.. Ask the thread to stop */
+
+          struct usbmsc_wrmsg_s msg = {0};
+          mqd_t wrmsgq;
+
+          msg.exitflag = 1;
+
+          wrmsgq = mq_open(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME, O_RDWR, 0644, NULL);
+          do
+            {
+              ret = mq_send(wrmsgq, (const char *)&msg, sizeof(struct usbmsc_wrmsg_s), CONFIG_USBMSC_SCSI_PRIO - 1);
+            }
+          while (ret < 0);
+          mq_close(wrmsgq);
+        }
+
+      /* Wait for the thread to exit */
+      nxsem_wait_uninterruptible(&priv->wrthsynch);
+    }
+  priv->wrthpid = 0;
+#endif
   /* Unregister the driver (unless we are a part of a composite device) */
 
 #ifndef CONFIG_USBMSC_COMPOSITE
@@ -1871,6 +1929,12 @@ void usbmsc_uninitialize(FAR void *handle)
   nxsem_destroy(&priv->thsynch);
   nxmutex_destroy(&priv->thlock);
   nxsem_destroy(&priv->thwaitsem);
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+  nxsem_destroy(&priv->wrthsynch);
+  nxmutex_destroy(&priv->wrthlock);
+  nxsem_destroy(&priv->wrthwaitsem);
+  mq_unlink(CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME);
+#endif
   kmm_free(priv);
 }
 

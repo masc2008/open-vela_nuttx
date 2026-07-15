@@ -41,6 +41,7 @@
 #include <nuttx/mutex.h>
 #include <nuttx/spinlock.h>
 #include <nuttx/semaphore.h>
+#include <nuttx/mqueue.h>
 #include <nuttx/usb/storage.h>
 #include <nuttx/usb/usbdev.h>
 
@@ -77,15 +78,22 @@
 #endif
 
 /* Number of requests in the write queue */
-
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+#define CONFIG_USBMSC_NWRREQS 128
+#else
 #ifndef CONFIG_USBMSC_NWRREQS
 #  define CONFIG_USBMSC_NWRREQS 4
+#endif
 #endif
 
 /* Number of requests in the read queue */
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+#define CONFIG_USBMSC_NRDREQS 1
+#else
 #ifndef CONFIG_USBMSC_NRDREQS
 #  define CONFIG_USBMSC_NRDREQS 4
+#endif
 #endif
 
 /* Logical endpoint numbers / max packet sizes */
@@ -200,6 +208,23 @@
 #  define CONFIG_USBMSC_SCSI_STACKSIZE 2048
 #endif
 
+/* Write cache */
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+#define USBMSC_WRITEMSGQUEUE_EMPTY (0)
+#define CONFIG_USBMSC_WRITE_CACHE_QUEUE_NAME "/usbmsc_cache_mq"
+#define CONFIG_USBMSC_WRITE_CACHE_PRIO (CONFIG_USBMSC_SCSI_PRIO - 1)
+
+#define CONFIG_USBDEV_RXSIZE (CONFIG_USBMSC_NWRREQS * CONFIG_USBMSC_BULKINREQLEN)
+#endif
+
+#ifndef CONFIG_USBMSC_WRITE_CACHE_QUEUE_SIZE
+#  define CONFIG_USBMSC_WRITE_CACHE_QUEUE_SIZE 4
+#endif
+
+#ifndef CONFIG_USBMSC_WRITE_CACHE_STACKSIZE
+#  define CONFIG_USBMSC_WRITE_CACHE_STACKSIZE 2048
+#endif
+
 /* USB Controller */
 
 #ifdef CONFIG_USBDEV_SELFPOWERED
@@ -254,6 +279,18 @@
 #define USBMSC_FLAGS_UACOKAY          (0x10) /* Bit 4: Command OK if unit attention condition */
 #define USBMSC_FLAGS_RETAINSENSEDATA  (0x20) /* Bit 5: Do not clear sense data */
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+/* Current state of the worker thread */
+
+#define USBMSC_WRSTATE_NOTSTARTED       (0)  /* Thread has not yet been started */
+#define USBMSC_WRSTATE_STARTED          (1)  /* Started, but is not yet initialized */
+#define USBMSC_WRSTATE_TERMINATED       (2)  /* Thread has exitted */
+
+/* Event communicated to worker thread */
+#define USBMSC_WREVENT_NOEVENTS         (0)      /* There are no outstanding events */
+#define USBMSC_WREVENT_READY            (1 << 0) /* Initialization is complete */
+#define USBMSC_WREVENT_TERMINATEREQUEST (1 << 1) /* Shutdown requested */
+#endif
 /* Descriptors **************************************************************/
 
 /* Big enough to hold our biggest descriptor */
@@ -340,6 +377,19 @@
  * Public Types
  ****************************************************************************/
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+/* Async write block device buffer config struct */
+struct usbmsc_wrmsg_s
+{
+  uint8_t                 exitflag;
+  uint8_t                 *buffer;
+  uint32_t                sector;                   /* Start sector */
+  uint32_t                nsectors;                 /* Sector number */
+  uint16_t                sectorsize;               /* Sector size */
+  struct usbmsc_lun_s     *lun;                     /* LUN point */
+};
+#endif
+
 /* Endpoint descriptors */
 
 enum usbmsc_epdesc_e
@@ -410,9 +460,9 @@ struct usbmsc_dev_s
   uint8_t           cbwdir:2;         /* Direction from CBW. See USBMSC_FLAGS_DIR* definitions */
   uint8_t           cdblen;           /* Length of cdb[] from CBW */
   uint8_t           cbwlun;           /* LUN from the CBW */
-  uint16_t          nsectbytes;       /* Bytes buffered in iobuffer[] */
-  uint16_t          nreqbytes;        /* Bytes buffered in head write requests */
-  uint16_t          iosize;           /* Size of iobuffer[] */
+  uint32_t          nsectbytes;       /* Bytes buffered in iobuffer[] */
+  uint32_t          nreqbytes;        /* Bytes buffered in head write requests */
+  uint32_t          iosize;           /* Size of iobuffer[] */
   uint32_t          cbwlen;           /* Length of data from CBW */
   uint32_t          cbwtag;           /* Tag from the CBW */
   union
@@ -438,6 +488,18 @@ struct usbmsc_dev_s
 
   struct usbmsc_req_s    wrreqs[CONFIG_USBMSC_NWRREQS];
   struct usbmsc_req_s    rdreqs[CONFIG_USBMSC_NRDREQS];
+
+  /* Async write worker kernel thread interface */
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+  pid_t             wrthpid;             /* The worker thread task ID */
+  sem_t             wrthsynch;          /* Used to synchronizer terminal events */
+  mutex_t           wrthlock;              /*  */
+  mqd_t             wrmsgq;              /* Message queue */
+  sem_t             wrthwaitsem;         /* Used to signal worker thread */
+  volatile uint8_t  wrthstate;          /* State of the worker thread */
+  volatile uint16_t wrtheventset;       /* Set of pending events signaled to worker thread */
+  uint8_t           *cache_buffer;
+#endif
 };
 
 /****************************************************************************
@@ -652,6 +714,26 @@ void usbmsc_rdcomplete(FAR struct usbdev_ep_s *ep,
  ****************************************************************************/
 
 void usbmsc_deferredresponse(FAR struct usbmsc_dev_s *priv, bool failed);
+
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+/****************************************************************************
+ * Name: usbmsc_cache_main
+ *
+ * Description:
+ *   This is the main function of the cache_io worker thread.
+ *
+ ****************************************************************************/
+int usbmsc_cache_main(int argc, char *argv[]);
+
+/****************************************************************************
+ * Name: usbmsc_cache_initialize
+ *
+ * Description:
+ *   cache thread initialize
+ *
+ ****************************************************************************/
+int usbmsc_cache_initialize(FAR struct usbmsc_dev_s *priv);
+#endif
 
 #undef EXTERN
 #if defined(__cplusplus)

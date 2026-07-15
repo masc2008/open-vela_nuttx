@@ -64,6 +64,7 @@
 #include <nuttx/usb/storage.h>
 #include <nuttx/usb/usbdev.h>
 #include <nuttx/usb/usbdev_trace.h>
+#include <nuttx/kmalloc.h>
 
 #include "usbmsc.h"
 
@@ -103,6 +104,10 @@
  * Private Function Prototypes
  ****************************************************************************/
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+static int usbmsc_wait_cache_empty(FAR struct usbmsc_dev_s *priv);
+static int usbmsc_cache_write(FAR struct usbmsc_dev_s *priv, uint8_t *buffer, uint32_t nrbufs);
+#endif
 /* Debug ********************************************************************/
 
 #if defined(CONFIG_DEBUG_INFO) && defined (CONFIG_DEBUG_USB)
@@ -1287,6 +1292,17 @@ static inline int usbmsc_cmdverify10(FAR struct usbmsc_dev_s *priv)
                i < blocks;
                i++, sector++)
             {
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+              ret = usbmsc_wait_cache_empty(priv);
+              if(ret < 0)
+                {
+                  usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_VERIFY10READFAIL),
+                           i);
+                  lun->sd     = SCSI_KCQME_UNRRE1;
+                  lun->sdinfo = sector;
+                  break;
+                }
+#endif
               nread = USBMSC_DRVR_READ(lun, priv->iobuffer, sector, 1);
               if (nread < 0)
                 {
@@ -1876,6 +1892,20 @@ static int usbmsc_idlestate(FAR struct usbmsc_dev_s *priv)
 
       /* Change to the CMDPARSE state and return success */
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+      if (priv->cbwdir == USBMSC_FLAGS_DIRHOST2DEVICE)
+      {
+        if ((priv->cbwlen <= CONFIG_USBDEV_RXSIZE) && (priv->cbwlen > 0))
+        {
+          req->len      = priv->cbwlen;
+        }
+        else if ((priv->cbwlen > CONFIG_USBDEV_RXSIZE) && (priv->cbwlen > 0))
+        {
+          req->len      = CONFIG_USBDEV_RXSIZE;
+        }
+      }
+#endif
+
       usbtrace(TRACE_CLASSSTATE(USBMSC_CLASSSTATE_IDLECMDPARSE),
                priv->cdb[0]);
       priv->thstate = USBMSC_STATE_CMDPARSE;
@@ -2260,6 +2290,7 @@ static int usbmsc_cmdreadstate(FAR struct usbmsc_dev_s *priv)
   FAR struct usbdev_req_s *req;
   irqstate_t flags;
   ssize_t nread;
+  ssize_t nrbytes;
   FAR uint8_t *src;
   FAR uint8_t *dest;
   int nbytes;
@@ -2278,9 +2309,23 @@ static int usbmsc_cmdreadstate(FAR struct usbmsc_dev_s *priv)
 
       if (priv->nsectbytes <= 0)
         {
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+          ret = usbmsc_wait_cache_empty(priv);
+          if(ret < 0)
+            {
+              usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_CMDREADREADFAIL), ret);
+              lun->sd     = SCSI_KCQME_UNRRE1;
+              lun->sdinfo = priv->sector;
+              break;
+            }
+#endif
           /* Yes.. read the next sector */
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+          nread = USBMSC_DRVR_READ(lun, priv->iobuffer, priv->sector, priv->u.xfrlen);
+#else
           nread = USBMSC_DRVR_READ(lun, priv->iobuffer, priv->sector, 1);
+#endif
           if (nread < 0)
             {
               usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_CMDREADREADFAIL),
@@ -2290,9 +2335,10 @@ static int usbmsc_cmdreadstate(FAR struct usbmsc_dev_s *priv)
               break;
             }
 
-          priv->nsectbytes = lun->sectorsize;
-          priv->u.xfrlen--;
-          priv->sector++;
+          nrbytes = lun->sectorsize * nread;
+          priv->nsectbytes = lun->sectorsize * nread;
+          priv->u.xfrlen -= nread;
+          priv->sector += nread;
         }
 
       /* Check if there is a request in the wrreqlist that we will be able to
@@ -2320,7 +2366,12 @@ static int usbmsc_cmdreadstate(FAR struct usbmsc_dev_s *priv)
        * OR (2) all of the data available in the sector buffer.
        */
 
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+      src    = &priv->iobuffer[nrbytes -  priv->nsectbytes];
+#else
       src    = &priv->iobuffer[lun->sectorsize - priv->nsectbytes];
+#endif
+
       dest   = &req->buf[priv->nreqbytes];
 
       nbytes = MIN(priv->epbulkin->maxpacket - priv->nreqbytes,
@@ -2415,7 +2466,7 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
   FAR struct usbmsc_req_s *privreq;
   FAR struct usbdev_req_s *req;
   ssize_t nwritten;
-  uint16_t xfrd;
+  ssize_t xfrd;
   FAR uint8_t *src;
   FAR uint8_t *dest;
   int nbytes;
@@ -2459,7 +2510,21 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
        * transferred to the block driver OR all of the request data has been
        * transferred.
        */
-
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+      if(priv->nsectbytes == 0)
+        {
+#ifdef CONFIG_USBMSC_WRMULTIPLE
+          priv->cache_buffer = kmm_malloc(lun->sectorsize * CONFIG_USBMSC_NWRREQS);
+#else
+          priv->cache_buffer = kmm_malloc(lun->sectorsize);
+#endif
+          if (!priv->cache_buffer)
+            {
+              usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_ALLOCIOBUFFER), 0);
+              goto errout;
+            }
+        }
+#endif
       while (priv->nreqbytes > 0 && priv->u.xfrlen > 0)
         {
           /* Copy the data received in the read request into the sector I/O
@@ -2468,6 +2533,9 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
 
           src  = &req->buf[xfrd - priv->nreqbytes];
           dest = &priv->iobuffer[priv->nsectbytes];
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+          dest = &priv->cache_buffer[priv->nsectbytes];
+#endif
 
 #ifdef CONFIG_USBMSC_WRMULTIPLE
           /* nbytes may end up being zero, after which the loop no longer
@@ -2503,10 +2571,14 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
           if ((priv->nsectbytes >= lun->sectorsize * priv->u.xfrlen) ||
               (priv->nsectbytes >= lun->sectorsize * CONFIG_USBMSC_NWRREQS))
             {
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+              nwritten = usbmsc_cache_write(priv,priv->cache_buffer,nrbufs);
+#else
               /* Yes.. Write next sectors */
 
               nwritten = USBMSC_DRVR_WRITE(lun, priv->iobuffer,
                                            priv->sector, nrbufs);
+#endif
               if (nwritten < 0)
                 {
                   usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_CMDWRITEWRITEFAIL),
@@ -2524,10 +2596,14 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
 #else
           if ((priv->nsectbytes >= lun->sectorsize))
             {
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+              nwritten = usbmsc_cache_write(priv,cache_buffer,1);
+#else
               /* Yes.. Write the next sector */
 
               nwritten = USBMSC_DRVR_WRITE(lun, priv->iobuffer,
                                            priv->sector, 1);
+#endif
               if (nwritten < 0)
                 {
                   usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_CMDWRITEWRITEFAIL),
@@ -2553,6 +2629,21 @@ static int usbmsc_cmdwritestate(FAR struct usbmsc_dev_s *priv)
       req->len      = priv->epbulkout->maxpacket;
       req->priv     = privreq;
       req->callback = usbmsc_rdcomplete;
+
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+      if (priv->u.xfrlen)
+      {
+        if ((priv->u.xfrlen * lun->sectorsize) > CONFIG_USBDEV_RXSIZE)
+        {
+          req->len  = CONFIG_USBDEV_RXSIZE;
+        }
+        else
+        {
+          req->len  = priv->u.xfrlen * lun->sectorsize;
+        }
+        uinfo("reqlen %d", req->len);
+      }
+#endif
 
       ret = EP_SUBMIT(priv->epbulkout, req);
       if (ret != OK)
@@ -3085,3 +3176,208 @@ void usbmsc_scsi_signal(FAR struct usbmsc_dev_s *priv)
       nxsem_post(&priv->thwaitsem);
     }
 }
+
+#ifdef CONFIG_USBMSC_WRITE_CACHE_ENABLE
+
+/****************************************************************************
+ * Name: usbmsc_cache_status
+ *
+ * Description:
+ *   Get write message queue status
+ *
+ ****************************************************************************/
+static int usbmsc_cache_status(FAR struct usbmsc_dev_s *priv)
+{
+  struct mq_attr attr;
+  int ret;
+
+  ret = mq_getattr(priv->wrmsgq,&attr);
+  if(ret < 0)
+  {
+    DEBUGASSERT(!ret);
+  }
+  return attr.mq_curmsgs;
+}
+
+/****************************************************************************
+ * Name: usbmsc_cache_write
+ *
+ * Description:
+ *   Puts write emmc message to cache_io worker from SCSI thread
+ *
+ ****************************************************************************/
+static int usbmsc_cache_write(FAR struct usbmsc_dev_s *priv, uint8_t *buffer, uint32_t nrbufs)
+{
+  FAR struct usbmsc_lun_s *lun = priv->lun;
+  struct usbmsc_wrmsg_s msg = {0};
+  int ret;
+
+  msg.buffer = buffer;
+  msg.sector = priv->sector;
+  msg.nsectors = nrbufs;
+  msg.sectorsize = lun->sectorsize;
+  msg.lun = lun;
+
+  if (usbmsc_cache_status(priv) == USBMSC_WRITEMSGQUEUE_EMPTY)
+    {
+      ret = nxsem_wait(&priv->wrthwaitsem);
+      if(ret < 0)
+        {
+          uerr("cache write wait sem error!!!\n");
+          kmm_free(msg.buffer);
+          goto error_out;
+        }
+    }
+  ret = mq_send(priv->wrmsgq, (const char *)&msg, sizeof(struct usbmsc_wrmsg_s), CONFIG_USBMSC_SCSI_PRIO);
+error_out:
+  return ret;
+}
+
+/****************************************************************************
+ * Name: usbmsc_wait_cache_empty
+ *
+ * Description:
+ *   Wait for a cache queue empty.
+ *
+ ****************************************************************************/
+static int usbmsc_wait_cache_empty(FAR struct usbmsc_dev_s *priv)
+{
+  int ret;
+
+  ret = nxsem_wait(&priv->wrthwaitsem);
+  if(ret < 0)
+    {
+      uerr("read state wait sem error!!!\n");
+      return ret;
+    }
+  nxsem_post(&priv->wrthwaitsem);
+  return ret;
+}
+
+/****************************************************************************
+ * Name: usbmsc_cache_initialize
+ *
+ * Description:
+ *   cache thread initialize
+ *
+ ****************************************************************************/
+int usbmsc_cache_initialize(FAR struct usbmsc_dev_s *priv)
+{
+  int ret;
+  irqstate_t flags;
+
+  g_usbmsc_handoff = priv;
+
+  priv->wrthstate = USBMSC_WRSTATE_NOTSTARTED;
+  priv->wrtheventset = USBMSC_WREVENT_NOEVENTS;
+
+  ret = nxmutex_lock(&priv->wrthlock);
+  if (ret < 0)
+    {
+      return ret;
+    }
+  /* Start the asynchronous write thread if configured */
+  ret = kthread_create("usbmsc-cache", CONFIG_USBMSC_WRITE_CACHE_PRIO,
+                       CONFIG_USBMSC_WRITE_CACHE_STACKSIZE,
+                       usbmsc_cache_main, NULL);
+  if (ret < 0)
+    {
+      usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_THREADCREATE), (uint16_t)ret);
+      nxmutex_unlock(&priv->wrthlock);
+      return ret;
+    }
+
+  priv->wrthpid = (pid_t)ret;
+  flags = enter_critical_section();
+  priv->wrtheventset |= USBMSC_WREVENT_READY;
+  leave_critical_section(flags);
+  nxmutex_unlock(&priv->wrthlock);
+
+  /* wait cache thread start */
+  ret = nxsem_wait_uninterruptible(&priv->wrthsynch);
+  DEBUGASSERT(g_usbmsc_handoff == NULL);
+  if (priv->wrthstate != USBMSC_WRSTATE_STARTED)
+    {
+      return -EEXIST;
+    }
+
+  return ret;
+}
+/****************************************************************************
+ * Name: usbmsc_cache_main
+ *
+ * Description:
+ *   This is the main function of the cache_io worker thread.
+ *
+ ****************************************************************************/
+int usbmsc_cache_main(int argc, char *argv[])
+{
+  FAR struct usbmsc_dev_s *priv;
+  struct usbmsc_wrmsg_s msg;
+  uint16_t threadstate;
+  ssize_t nbytes;
+  unsigned int prio;
+  int ret;
+
+  priv = g_usbmsc_handoff;
+  DEBUGASSERT(priv);
+  g_usbmsc_handoff = NULL;
+
+  /* wait initialize done */
+  ret = nxmutex_lock(&priv->wrthlock);
+  if(ret < 0)
+    {
+      goto error_out;
+    }
+  priv->wrthstate = USBMSC_WRSTATE_STARTED;
+  if ((priv->wrtheventset & USBMSC_WREVENT_READY) == 0)
+    {
+      priv->wrthstate = USBMSC_WRSTATE_TERMINATED;
+    }
+  threadstate = priv->wrthstate;
+  nxmutex_unlock(&priv->wrthlock);
+
+  nxsem_post(&priv->wrthsynch);
+
+  uinfo("Cache thread Running\n");
+  while (threadstate == USBMSC_WRSTATE_STARTED)
+    {
+      /* flash data to emmc */
+      nbytes = mq_receive(priv->wrmsgq, (FAR char *)&msg, sizeof(struct usbmsc_wrmsg_s), &prio);
+      if (nbytes != sizeof(struct usbmsc_wrmsg_s))
+        {
+          uerr("receive fail\n");
+          usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_CMDWRITEWRITEFAIL), -nbytes);
+          msg.lun->sd     = SCSI_KCQME_WRITEFAULTAUTOREALLOCFAILED;
+          msg.lun->sdinfo = msg.sector;
+          continue;
+        }
+      /* usbmsc_uninitialize send msg for notify cache worker exit */
+      if(msg.exitflag)
+        {
+          break;
+        }
+      nbytes = USBMSC_DRVR_WRITE(msg.lun, msg.buffer, msg.sector, msg.nsectors);
+      if (nbytes < 0)
+        {
+          usbtrace(TRACE_CLSERROR(USBMSC_TRACEERR_CMDWRITEWRITEFAIL), -nbytes);
+          msg.lun->sd     = SCSI_KCQME_WRITEFAULTAUTOREALLOCFAILED;
+          msg.lun->sdinfo = msg.sector;
+        }
+      kmm_free(msg.buffer);
+
+      if(usbmsc_cache_status(priv) == USBMSC_WRITEMSGQUEUE_EMPTY)
+        {
+          nxsem_post(&priv->wrthwaitsem);
+        }
+    }
+
+  uinfo("Cache thread exit\n");
+  priv->wrthstate = USBMSC_WRSTATE_TERMINATED;
+
+error_out:
+  mq_close(priv->wrmsgq);
+  nxsem_post(&priv->wrthsynch);
+  return EXIT_SUCCESS;
+}
+#endif

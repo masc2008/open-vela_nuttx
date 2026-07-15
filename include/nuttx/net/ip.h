@@ -174,8 +174,8 @@ struct ipv4_opt_s
 
 struct ipv6_hdr_s
 {
-  uint8_t  vtc;              /* Bits 0-3: version, bits 4-7: traffic class (MS) */
-  uint8_t  tcf;              /* Bits 0-3: traffic class (LS), 4-bits: flow label (MS) */
+  uint8_t  vtc;              /* Bits 7-4: version, bits 3-0: traffic class (MS) */
+  uint8_t  tcf;              /* Bits 7-4: traffic class (LS), 4-bits: flow label (MS) */
   uint16_t flow;             /* 16-bit flow label (LS) */
   uint8_t  len[2];           /* 16-bit Payload length */
   uint8_t  proto;            /*  8-bit Next header (same as IPv4 protocol field) */

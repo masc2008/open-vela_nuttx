@@ -64,12 +64,12 @@ uint16_t ipv6_build_header(FAR struct ipv6_hdr_s *ipv6, uint16_t payload_len,
 {
   /* Set up the IPv6 header */
 
-  ipv6->vtc      = 0x60;                 /* Version/traffic class (MS) */
-  ipv6->tcf      = tclass;               /* Traffic class(LS)/Flow label(MS) */
-  ipv6->flow     = 0;                    /* Flow label (LS) */
-  ipv6->len[0]   = (payload_len >> 8);   /* Length excludes the IPv6 header */
+  ipv6->vtc      = 0x60|((tclass & 0xf0) >> 4); /* Version/traffic class (MS) */
+  ipv6->tcf      = ((tclass & 0x0f) <<4 );      /* Traffic class(LS)/Flow label(MS) */
+  ipv6->flow     = 0;                           /* Flow label (LS) */
+  ipv6->len[0]   = (payload_len >> 8);          /* Length excludes the IPv6 header */
   ipv6->len[1]   = (payload_len & 0xff);
-  ipv6->proto    = prot;                 /* Next header */
+  ipv6->proto    = prot;                        /* Next header */
   ipv6->ttl      = ttl;
 
   /* It's possible to use srcip to initialize destip */

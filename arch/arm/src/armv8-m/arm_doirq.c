@@ -83,7 +83,12 @@ uint32_t *arm_doirq(int irq, uint32_t *regs)
    * is invalid, and we can safely overwrite it.
    * And suspend the scheduler for the current task.
    */
-
+#if defined(CONFIG_CPUDUMP)
+  if (irq >= NVIC_IRQ_HARDFAULT && irq<= NVIC_IRQ_SECUREFAULT)
+    {
+      nuttx_cpudump_disable(CONFIG_CPUDUMP_ID);
+    }
+#endif
   if (tcb != NULL)
     {
       tcb->xcp.regs = regs;

@@ -970,7 +970,7 @@ static int ftl_geometry(FAR struct inode *inode,
       geometry->geo_available     = true;
       geometry->geo_mediachanged  = false;
       geometry->geo_writeenabled  = true;
-      geometry->geo_nsectors      = dev->lpcount * dev->blkper;
+      geometry->geo_nsectors      = ((dev->lptable == NULL) ? dev->geo.neraseblocks : dev->lpcount) * dev->blkper;
       geometry->geo_sectorsize    = dev->geo.blocksize;
 
       strlcpy(geometry->geo_model, dev->geo.model,

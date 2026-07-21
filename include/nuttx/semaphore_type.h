@@ -59,7 +59,7 @@
 
 /* Macros to retrieve sem count and to check if nxsem is mutex */
 
-#define NXSEM_COUNT(s)        ((FAR atomic_t *)&(s)->val.semcount)
+#define NXSEM_COUNT(s)        ((FAR atomic_t *)&((s)->val.semcount))
 #define NXSEM_IS_MUTEX(s)     (((s)->flags & SEM_TYPE_MUTEX) != 0)
 
 /* Mutex related helper macros */
@@ -69,7 +69,7 @@
 
 /* Macro to retrieve mutex's atomic holder's ptr */
 
-#define NXSEM_MHOLDER(s)      ((FAR atomic_t *)&(s)->val.mholder)
+#define NXSEM_MHOLDER(s)      ((FAR atomic_t *)&((s)->val.mholder))
 
 /* Check if holder value (TID) is not NO_HOLDER or RESET */
 

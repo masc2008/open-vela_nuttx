@@ -32,7 +32,6 @@ set(SRCS
     arm_initialize.c
     arm_lowputs.c
     arm_modifyreg.c
-    arm_nputs.c
     arm_releasestack.c
     arm_registerdump.c
     arm_stackframe.c
@@ -40,6 +39,10 @@ set(SRCS
     arm_fork.c
     arm_poweroff.c
     ${ARCH_TOOLCHAIN_PATH}/fork.S)
+
+if(NOT CONFIG_BES_LPUART)
+  list(APPEND SRCS arm_nputs.c)
+endif()
 
 if(NOT CONFIG_ALARM_ARCH AND NOT CONFIG_TIMER_ARCH)
   list(APPEND SRCS arm_mdelay.c arm_udelay.c)
